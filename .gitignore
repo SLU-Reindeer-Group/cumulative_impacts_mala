@@ -1,0 +1,9 @@
+# ignore files and folders
+data/*
+literature/*
+text/*
+output/*
+.Rproj.user/*
+.Rproj.user
+code/*rda
+code/*csv

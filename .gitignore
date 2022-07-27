@@ -1,7 +1,6 @@
 # ignore files and folders
 data/*
 literature/*
-maps/*
 text/*
 output/*
 .Rproj.user/*

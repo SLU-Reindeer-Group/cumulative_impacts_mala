@@ -5,7 +5,7 @@
 
 #---- global_options, include=FALSE
 library(knitr)
-knitr::opts_chunk$set(eval = FALSE, tidy = TRUE, tidy.opts=list(width.cutoff=60))
+knitr::opts_chunk$set(eval = TRUE, tidy = TRUE, tidy.opts=list(width.cutoff=60))
 
 #---- settings
 
@@ -159,7 +159,10 @@ details_years <- grep("details", aux_files, value = T) |>
   read.csv(stringsAsFactors = F) |> 
   dplyr::as_tibble() |> 
   dplyr::mutate(construction = factor(construction, levels = c("before", "during", "after"))) |> 
-  dplyr::mutate_at(vars(contains("date")), lubridate::ymd, tz = "UTC")
+  dplyr::mutate_at(vars(contains("date")), lubridate::ymd, tz = "UTC") |> 
+  dplyr::mutate(duration_calving = difftime(date_end_calving, date_start_calving, units = "days"),
+                duration_summer = difftime(date_end_summer, date_start_summer, units = "days"),
+                duration_autumn = difftime(date_end_autumn, date_start_autumn, units = "days"))
 
 # repeated animals, to be removed
 individuals_to_remove <- grep("individuals", aux_files, value = T) |> 
@@ -401,8 +404,8 @@ gps_calving_clean5 <- gps_calving_clean5[-when_in_corral,]
               n = n())) |> 
   print(n = 350)
 
-# remove individuals with less than 14 days of monitoring
-min_days <- 14
+# remove individuals with less than 40 days of monitoring
+min_days <- 40
 
 inds_few_days <- summary2 |> 
   dplyr::filter(as.numeric(duration) <= min_days)
@@ -481,8 +484,8 @@ gps_calving_clean7 <- cutltraj(gps_ltraj2, "foo(herding)", nextr = F) |>
               n = n())) |> 
   print(n = 300)
 
-# remove bursts with less than 14 days
-min_days_burst <- 14
+# remove bursts with less than 40 days
+min_days_burst <- 40
 fix_rate <- 2
 min_points_burst <- min_days_burst*24/fix_rate
 
@@ -761,8 +764,8 @@ gps_summer_clean5 <- gps_summer_clean5[-when_in_corral,]
               n = n())) |> 
   print(n = 350)
 
-# remove individuals with less than 14 days of monitoring
-min_days <- 14
+# remove individuals with less than 40 days of monitoring
+min_days <- 40
 
 inds_few_days <- summary2 |> 
   dplyr::filter(as.numeric(duration) <= min_days)
@@ -842,7 +845,7 @@ gps_summer_clean7 <- cutltraj(gps_ltraj2, "foo(herding)", nextr = F) |>
   print(n = 300)
 
 # remove bursts with less than 7 days
-min_days_burst <- 14
+min_days_burst <- 40
 fix_rate <- 2
 min_points_burst <- min_days_burst*24/fix_rate
 
@@ -1070,8 +1073,8 @@ gps_autumn_clean5 <- gps_autumn_clean5[-when_in_corral,]
               n = n())) |> 
   print(n = 350)
 
-# remove individuals with less than 14 days of monitoring
-min_days <- 14
+# remove individuals with less than 40 days of monitoring
+min_days <- 40
 
 inds_few_days <- summary2 |> 
   dplyr::filter(as.numeric(duration) <= min_days)
@@ -1151,7 +1154,7 @@ gps_autumn_clean7 <- cutltraj(gps_ltraj, "foo(herding)", nextr = F) |>
   print(n = 300)
 
 # remove bursts with less than 7 days
-min_days_burst <- 14
+min_days_burst <- 40
 fix_rate <- 2
 min_points_burst <- min_days_burst*24/fix_rate
 

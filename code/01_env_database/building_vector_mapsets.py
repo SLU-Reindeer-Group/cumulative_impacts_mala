@@ -31,6 +31,7 @@ for i in mapset_names:
 
 # root folder
 root_dir = r"D:\bernardo\00_academico\07_projetos\05_reindeer\05_env_data\02_vector"
+#root_dir = r"/home/NINA.NO/bernardo.brandao/Mounts/P-Prosjekter/41203800_oneimpact/05_papers/12_cumulative_impacts_mala/maps/"
 os.chdir(root_dir)
 
 #---------------------------------------
@@ -41,6 +42,7 @@ g.mapset(mapset = "sam_env")
 
 # folder
 env_dir = r"sam_env/"
+env_dir = r"report/"
 
 # load wind turbines in operation 2020 - OK
 v.in_ogr(input = env_dir+"wind_turbines_operation_Vindkraftverk_2020.shp", 
@@ -82,8 +84,10 @@ v.in_ogr(input = env_dir+"houses_Hus_2020.shp", output = "houses_lm_2020")
 v.in_ogr(input = env_dir+"urban_Bebyggelseomrade_vagkartan_2020.shp", output = "urban_lm_2020")
 
 # trails 2020 - OK
-v.in_ogr(input = env_dir+"trails_Stigar_och_leder_oversiktskartan_2020.shp", 
-    output = "trails_lm_2020")
+#v.in_ogr(input = env_dir+"trails_Stigar_och_leder_oversiktskartan_2020.shp", 
+#    output = "trails_lm_2020")
+v.in_ogr(input = env_dir+"trails_vector.gpkg", 
+    output = "trails_lm_2020", flags = ["o", "t", "overwrite"])
 
 # snowmobile tracks 2020 - OK
 v.in_ogr(input = env_dir+"snow_mobile_trails_Skoterleder_i_fjallen_fjallkartan_2020.shp", 

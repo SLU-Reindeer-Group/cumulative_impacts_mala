@@ -642,7 +642,7 @@ for input_map in tour:
     
     # rasterize
     v.to_rast(input = input_map+"@"+mapset_vector, output = input_map+"_rast", use = "val", 
-        value = 1, overwrite = True)
+        value = 1, flags = "d", overwrite = True)
 
 #---------------------------------------
 # Process landscape data

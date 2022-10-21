@@ -45,8 +45,8 @@ rgrass7::execGRASS("v.in.ogr", input = mask, output = "mask", flags = c("o", "t"
 
 # List raw maps
 raw_maps <- list.files(path = "maps/report/", pattern = "raw.tif", full.names = T)
-raw_maps_names <- list.files(path = "maps/report/", pattern = "raw.tif") %>%
-  strsplit(split = "_raw") %>%
+raw_maps_names <- list.files(path = "maps/report/", pattern = "raw.tif") |>
+  strsplit(split = "_raw") |>
   sapply(FUN = first)
 
 # Import all maps to GRASS
@@ -64,11 +64,43 @@ for(i in seq_along(raw_maps_names)) {
 }
 
 #------
+# calculate distance to the nearest feature for trails (not computed earlier) 
+# using 10m resolution
+
+# remove mask, if present
+rgrass7::execGRASS("r.mask", flags = "r")
+# define region in GRASS GIS
+rgrass7::execGRASS("g.region", raster = raw_maps_names[1],
+                   flags = "p")
+
+# compute distance
+inp <- raw_maps_names |> grep(pattern = "trails", value = TRUE)
+trails_nearest_name <- oneimpact::calc_zoi_nearest(x = inp,
+                                                   type = "euclidean",
+                                                   where = "GRASS",
+                                                   g_overwrite = TRUE, 
+                                                   verbose = TRUE)
+# export
+# region
+rgrass7::execGRASS("g.region", raster = raw_maps_names[1],
+                   flags = "p")
+# mask
+rgrass7::execGRASS("r.mask", vector = "mask", flags = "overwrite")
+# export
+rgrass7::execGRASS("r.out.gdal", input = trails_nearest_name, 
+                   output = "maps/report/trail_dist.tif", 
+                   createopt = "COMPRESS=DEFLATE", flags = "overwrite")
+# remove mask
+rgrass7::execGRASS("r.mask", flags = "r")
+
+#------
 # calculate cumulative ZoI up to 500m using 10m resolution
 
 # redefine maps with region around, since there are edge effects when
 # running r.mfilter
 
+# remove mask, if present
+rgrass7::execGRASS("r.mask", flags = "r")
 # define region in GRASS GIS
 rgrass7::execGRASS("g.region", raster = raw_maps_names[1],
                    flags = "p")
@@ -88,32 +120,38 @@ for(i in seq_along(names_expanded)) {
 
 # Exponential decay ZoI up to 500
 # example for wind turbines
-inp <- names_expanded %>% grep(pattern = "wind", value = TRUE)
+inp <- names_expanded |> grep(pattern = "wind", value = TRUE)
 radii <- c(100, 250, 500)
 exp_name <- oneimpact::calc_zoi_cumulative(x = inp,
-                                           zoi_radius = radii, zoi_limit = 0.05,
-                                           type = "exp_decay", module = "r.mfilter",
+                                           radius = radii, 
+                                           zoi_limit = 0.05,
+                                           type = "exp_decay", 
+                                           g_module = "r.mfilter",
                                            output_type = "cumulative_zoi",
                                            where = "GRASS",
-                                           overwrite = T, quiet = F)
+                                           g_overwrite = TRUE, 
+                                           verbose = TRUE)
 
 # Exponential decay ZoI up to 500
 # for all other infrastructure
 radii <- c(100, 250, 500)
 for(inp in names_expanded[1:10]) {
   exp_name <- oneimpact::calc_zoi_cumulative(x = inp,
-                                             zoi_radius = radii, zoi_limit = 0.05,
-                                             type = "exp_decay", module = "r.mfilter",
+                                             radius = radii, 
+                                             zoi_limit = 0.05,
+                                             type = "exp_decay", 
+                                             g_module = "r.mfilter",
                                              output_type = "cumulative_zoi",
                                              where = "GRASS",
-                                             overwrite = T, quiet = F)
+                                             g_overwrite = TRUE, 
+                                             verbose = TRUE)
 }
 
 # mask the maps to the sameby area
 
 # list maps
-maps_zoi_ext <- rgrass7::execGRASS("g.list", type = "raster", pattern = "*expanded15km_zoi*") %>% 
-  attr("resOut") %>% 
+maps_zoi_ext <- rgrass7::execGRASS("g.list", type = "raster", 
+                                   pattern = "*expanded15km_zoi*", intern = TRUE) |> 
   grep(pattern = "100$|250$|decay500$", value = TRUE)
 maps_zoi <- gsub("_expanded15km", "", maps_zoi_ext)
 
@@ -148,24 +186,27 @@ for(i in seq_along(names_expanded)) {
   rgrass7::execGRASS("r.resamp.stats",
                      input = names_expanded[i],
                      output = names_50m[i],
-                     method = "maximum")
+                     method = "maximum",
+                     flags = "overwrite")
 }
 
 # Exponential decay ZoI from 1000m to 10km
 # for all infrastructure types
 radii <- c(1000, 2500, 5000, 10000)
-for(inp in names_50m) {
+for(inp in names_50m[9]) {
   exp_name <- oneimpact::calc_zoi_cumulative(x = inp,
-                                             zoi_radius = radii, zoi_limit = 0.05,
-                                             type = "exp_decay", module = "r.mfilter",
+                                             radius = radii, 
+                                             zoi_limit = 0.05,
+                                             type = "exp_decay", 
+                                             g_module = "r.mfilter",
                                              output_type = "cumulative_zoi",
                                              where = "GRASS",
-                                             overwrite = T, quiet = F)
+                                             g_overwrite = TRUE, 
+                                             verbose = TRUE)
 }
 
 # interpolate back to 10m
-maps_zoi_50 <- rgrass7::execGRASS("g.list", type = "raster", pattern = "*res50_zoi*") %>% 
-  attr("resOut")
+maps_zoi_50 <- rgrass7::execGRASS("g.list", type = "raster", pattern = "*res50_zoi*", intern = TRUE)
 maps_zoi_interp10 <- gsub("_expanded15km_res50", "", maps_zoi_50)
 
 for(i in seq_along(maps_zoi_50)) {
@@ -184,8 +225,7 @@ rgrass7::execGRASS("r.mask", flags = "r")
 
 #---------
 # export
-maps_zoi_final <- rgrass7::execGRASS("g.list", type = "raster", pattern = "*bin_zoi*") %>% 
-  attr("resOut")
+maps_zoi_final <- rgrass7::execGRASS("g.list", type = "raster", pattern = "*bin_zoi*", intern = TRUE)
 
 for(i in maps_zoi_final) {
   # region
@@ -194,7 +234,7 @@ for(i in maps_zoi_final) {
   rgrass7::execGRASS("r.mask", vector = "mask", flags = "overwrite")
   # export
   rgrass7::execGRASS("r.out.gdal", input = i, output = paste0("maps/", i, ".tif"),
-                     createopt = "COMPRESS=DEFLATE")
+                     createopt = "COMPRESS=DEFLATE", flags = "overwrite")
   # remove mask
   rgrass7::execGRASS("r.mask", flags = "r")
 }
@@ -209,12 +249,12 @@ for(i in maps_zoi_final) {
 # Read maps of Euclidean distance to the nearest feature
 
 # List raw maps
-raw_maps_dist <- list.files(path = "maps/report/", pattern = "dist", full.names = T) %>% 
-  grep(pattern = ".tif$", value = TRUE) %>% 
-  grep(pattern = "snowmob|jokk|aml|jsy|stor|ytte", value = TRUE, invert = TRUE) %>% 
+raw_maps_dist <- list.files(path = "maps/report/", pattern = "dist", full.names = TRUE) |> 
+  grep(pattern = ".tif$", value = TRUE) |> 
+  grep(pattern = "snowmob|jokk|aml|jsy|stor|ytte|wrong", value = TRUE, invert = TRUE) %>%
   .[c(1,2,4,3,5:11)]
-raw_maps_dist_names <- list.files(path = "maps/report/", pattern = "raw.tif") %>%
-  strsplit(split = "_1null_raw") %>%
+raw_maps_dist_names <- list.files(path = "maps/report/", pattern = "raw.tif") |>
+  strsplit(split = "_1null_raw") |>
   sapply(FUN = first)
 
 # read
@@ -226,13 +266,13 @@ radii <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zoi_nearest_rasts <- list()
 for(i in seq_along(dist_rasts)) {
   print(raw_maps_dist_names[i])
-  zoi_nearest_rasts[[i]] <- oneimpact::exp_decay(dist_rasts[[i]], zoi_radius = radii)
+  zoi_nearest_rasts[[i]] <- oneimpact::exp_decay(dist_rasts[[i]], radius = radii)
   names(zoi_nearest_rasts[[i]]) <- radii
 }
 names(zoi_nearest_rasts) <- raw_maps_dist_names
 
 # check
-plot(zoi_nearest_rasts[[1]][[c(3,6)]])
+plot(zoi_nearest_rasts[[9]][[c(3,6)]])
 
 # export
 for(i in seq_along(zoi_nearest_rasts)) {
@@ -257,7 +297,7 @@ for(i in seq_along(zoi_nearest_rasts)) {
 #---------
 # Select other relevant layers
 
-raw_maps_other <- list.files(path = "maps/report/", pattern = ".tif$", full.names = T) %>% 
+raw_maps_other <- list.files(path = "maps/report/", pattern = ".tif$", full.names = T) |> 
   grep(pattern = "bear|clear_cuts|dem|landcover|sound|tpi|viewshed|wind_dist_|wolf|wolverine",
        value = TRUE)
 

@@ -267,7 +267,7 @@ zoi_nearest_rasts <- list()
 for(i in seq_along(dist_rasts)) {
   print(raw_maps_dist_names[i])
   zoi_nearest_rasts[[i]] <- oneimpact::exp_decay(dist_rasts[[i]], radius = radii)
-  names(zoi_nearest_rasts[[i]]) <- radii
+  names(zoi_nearest_rasts[[i]]) <- paste0(raw_maps_dist_names[i], "_bin_zoi_nearest_exp_decay", radii)
 }
 names(zoi_nearest_rasts) <- raw_maps_dist_names
 

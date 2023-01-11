@@ -1180,7 +1180,7 @@ wfs <- c("jokkmokksliden", "storliden", "ytteberg", "amliden")
 data_ready_calving_rsf_2h <- data_ready_calving_rsf_2h %>% 
   dplyr::mutate(viewshed_aml15km = ifelse(wind_turbines_dist_aml >  dist_cutoff, 0, viewshed_amliden_mala_binary),
                 cos_aspect = cos(aspect),
-                wind_dist_comb = pmin(wind_turbines_dist_jsy, wind_turbines_dist_aml),
+                wind_turbines_dist_comb = pmin(wind_turbines_dist_jsy, wind_turbines_dist_aml),
                 dist_wf_closest = apply(cbind(wind_turbines_dist_jokk, wind_turbines_dist_stor, wind_turbines_dist_ytte, wind_turbines_dist_aml), 1, which.min),
                 wf_name = factor(dist_wf_closest, levels = 1:4, labels = wfs))
 

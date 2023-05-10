@@ -19,7 +19,6 @@ rm(list = ls())
 # Load packages
 install.load::install_load("tidyverse", "ggridges", "GGally")
 install.load::install_load("broom", "bbmle", "ggeffects")
-install.load::install_load("amt")
 install.load::install_load("glmnet")
 
 library(devtools)
@@ -61,9 +60,8 @@ fit1$formula
 summary(fit1)
 car::vif(fit1)
 
-# backward deletion
-# remove cos_aspect
-base_formula2 <- base_formula#update(base_formula, ~ . - cos_aspect)
+# backward deletion - ignore it for now
+base_formula2 <- base_formula #update(base_formula, ~ . - cos_aspect)
 fit2 <- glm(update(base_formula2, ~ . + tpi_cat_s150m),
             data = data_ready_summer_rsf_2h, #weights = w_obs,
             family = binomial(link = "logit"))
@@ -122,6 +120,7 @@ summary(best_fit)
 #-------
 # GLM, no threshold regression, using ZoI for wind power and mining
 
+# base formula
 base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
   scale(sos) + 
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
@@ -129,6 +128,7 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(house_dist+1) + scale(mining_Krist_nearestXXX) +
   wf_name + landcover_cc*phase*scale(wind_turbines_ZZZ)
 
+# values for ZOI radii and metrics, TPI scales, and type of land cover variable
 scals <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zois <- c("nearest", "cumulative")
 wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
@@ -137,11 +137,11 @@ lc_var <- c("landcover_cc", "viewshed_lc")
 
 # n models = 7*2*14*3*2 = 1176
 
-# using land cover
+# loop over models
 fits <- tibble::tibble(mining = numeric(), wind = character(), 
                        tpi = character(), lc = character(), 
                        aic = numeric(), definition = character())
-#models <- list()
+
 counter <- 1
 for(i in scals) {
   for(j in wind_scals) {
@@ -170,7 +170,7 @@ for(i in scals) {
   }}}
 }
 
-save(fits, file = "output/summer_multi_zoi_table.rda")
+#save(fits, file = "output/summer_multi_zoi_table.rda")
 #load("output/summer_multi_zoi_table.rda")
 fits
 
@@ -190,11 +190,24 @@ fits
 tab_models |>
   readr::write_csv(file = "output/01_traditional_fit/rsf_summer_AIC_table_complete.csv")
 
+# save(tab_models, file = "output/summer_multi_zoi_table.rda")
+
+#---------------
+# Re-run best model
+load("output/summer_multi_zoi_table.rda")
+tab_models
+
+form <- tab_models$definition[1]
+best_fit <- glm(form, 
+                data = data_ready_summer_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+
 #---------------
 # More info, summary, and predictions on the best model
 
 broom::glance(best_fit)
-broom::tidy(best_fit)
+broom::tidy(best_fit) |>
+  print(n = 100)
 
 m1_plot <- broom::tidy(best_fit) %>% 
   dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0))) %>% 

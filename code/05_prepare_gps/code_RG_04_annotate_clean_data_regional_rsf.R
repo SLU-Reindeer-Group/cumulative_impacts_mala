@@ -1203,7 +1203,7 @@ years_data <- attr(ndvi_maps, "dimensions")$band$values
 ndvi_maps <- stars::st_set_dimensions(ndvi_maps, 3, values = lubridate::ymd(paste0(years_data, md)), names = "time")
 
 # merge start of season maps
-sos_maps <- c(sos_beck[,,,years_data], sos_beck[,,,years_data])
+sos_maps <- c(sos_beck[,,,years_data], sos_elmore[,,,years_data])
 sos_maps <- stars::st_set_dimensions(sos_maps, 3, values = lubridate::ymd(paste0(years_data, md)), names = "time")
 
 #load("data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")

@@ -19,7 +19,6 @@ rm(list = ls())
 # Load packages
 install.load::install_load("tidyverse", "ggridges", "GGally")
 install.load::install_load("broom", "bbmle", "ggeffects")
-install.load::install_load("amt")
 install.load::install_load("glmnet")
 
 library(devtools)
@@ -61,9 +60,8 @@ fit1$formula
 summary(fit1)
 car::vif(fit1)
 
-# backward deletion
-# remove cos_aspect
-base_formula2 <- base_formula#update(base_formula, ~ . - cos_aspect)
+# backward deletion - ignore that for now
+base_formula2 <- base_formula #update(base_formula, ~ . - cos_aspect)
 fit2 <- glm(update(base_formula2, ~ . + tpi_cat_s150m),
             data = data_ready_autumn_rsf_2h, #weights = w_obs,
             family = binomial(link = "logit"))
@@ -122,6 +120,7 @@ summary(best_fit)
 #-------
 # GLM, no threshold regression, using ZoI for wind power and mining
 
+# base formula
 base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
   scale(eos) + 
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
@@ -129,6 +128,7 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(house_dist+1) + scale(mining_Krist_nearestXXX) +
   wf_name + landcover_cc*phase*scale(wind_turbines_ZZZ)
 
+# values for ZOI radii and metrics, TPI scales, and type of land cover variable
 scals <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zois <- c("nearest", "cumulative")
 wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
@@ -137,7 +137,7 @@ lc_var <- c("landcover_cc", "viewshed_lc")
 
 # n models = 7*2*14*3*2 = 1176
 
-# using land cover
+# loop over models
 fits <- tibble::tibble(mining = numeric(), wind = character(), 
                        tpi = character(), lc = character(), 
                        aic = numeric(), definition = character())
@@ -170,8 +170,8 @@ for(i in scals) {
   }}}
 }
 
-save(fits, file = "output/autumn_multi_zoi_table.rda")
-#load("output/autumn_multi_zoi_table.rda")
+#save(fits, file = "output/autumn_multi_zoi_table.rda")
+load("output/autumn_multi_zoi_table.rda")
 fits
 
 # compare models
@@ -190,11 +190,24 @@ fits
 tab_models |>
   readr::write_csv(file = "output/01_traditional_fit/rsf_autumn_AIC_table_complete.csv")
 
+#save(tab_models, file = "output/autumn_multi_zoi_table.rda")
+
 #---------------
-# More info, summary, and predictions on the best model for log
+# Re-run best model for log-distance
+load("output/autumn_multi_zoi_table.rda")
+tab_models
+
+form <- tab_models$definition[3]
+best_fit <- glm(form, 
+                data = data_ready_autumn_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+
+#---------------
+# More info, summary, and predictions on the best log model
 
 broom::glance(best_fit)
-broom::tidy(best_fit)
+broom::tidy(best_fit) |>
+  print(n = 100)
 
 m1_plot <- broom::tidy(best_fit) %>% 
   dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0))) %>% 
@@ -215,6 +228,9 @@ model_call <- sapply(attr(AICvals_phase, "row.names"), function(x) paste(as.char
 AICvals_phase %>% 
   dplyr::as_tibble(rownames = "model") %>%
   dplyr::mutate(definition = unname(model_call)) %>%
+  dplyr::rename(aic = AIC) |>
+  dplyr::bind_rows(tab_models) |>
+  dplyr::arrange(dAIC) |>
   readr::write_csv(file = "output/01_traditional_fit/rsf_autumn_AIC_table_log.csv")
 
 summary(best_fit)
@@ -224,7 +240,6 @@ coefs <- broom::tidy(best_fit) %>%
 coefs %>% 
   mutate_if(is.numeric, round, digits = 3) %>% 
   readr::write_csv(file = "output/01_traditional_fit/rsf_autumn_coef_table_log.csv")
-
 
 #-------------------------------
 # predictions
@@ -265,7 +280,7 @@ g_log_wind <- pr_log_wind_phase %>%
   #ylim(0, 1) +
   xlim(0, 10)
 ggsave(filename = "output/01_traditional_fit/autumn_wind_phase_view_ytte.png", plot = g_log_wind, 
-       width = 20, height = 10, units = "cm", dpi = 300)
+       width = 20, height = 20, units = "cm", dpi = 300)
 
 # wind dist, phase, and land cover, for places closer to each of the WFs
 wfs <- levels(data_ready_autumn_rsf_2h$wf_name)
@@ -459,4 +474,209 @@ coefs %>%
   mutate_if(is.numeric, round, digits = 3) %>% 
   readr::write_csv(file = "output/01_traditional_fit/rsf_autumn_coef_table_zoi.csv")
 
+#-------------------------------
+# predictions
+
+cols <- rev(RColorBrewer::brewer.pal(3, "Set1"))
+
+# averaged over all conditions, only slope
+pr_slp <- ggpredict(fit_best_zoi, terms = "slope",
+                   typical = "median") 
+plot(pr_slp, lim = c(0, 1)) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey")
+
+# only wind dist, averaged over all land cover types
+# pr_wind_general <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase"),
+#                             typical = "median")
+# pr_wind_general$x <- pr_wind_general$x/1000
+# g_wind_general <- pr_wind_general %>% 
+#   plot(limits = c(0,1), show.title = F, show.x.title = F, col = cols) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Distance to wind turbines (km)",
+#        y = "Predicted probability of use",
+#        colour = "Phase") +
+#   xlim(0, 10)
+# ggsave(filename = "results/autumn_wind_phase_general.png", plot = g_wind_general, 
+#        width = 15, height = 12, units = "cm", dpi = 300)
+
+# wind dist, phase, and land cover, for ytteberg
+pr_zoi_wind_phase <- ggpredict(fit_best_zoi, terms = c("wind_turbines_nearest10000", "phase", "landcover_cc"),
+                               typical = "median", condition = c(wf_name = "ytteberg"))
+#, condition = c(landcover_cc = "coniferous forests"))
+# pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
+pr_zoi_wind_phase <- pr_log_wind_phase
+pr_zoi_wind_phase$x <- (10000*log(pr_zoi_wind_phase$x)/log(0.05))/1000 # in km
+g_zoi_wind <- pr_zoi_wind_phase %>% 
+  plot(show.title = F, col = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to wind turbines (m)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  #ylim(0, 1) +
+  xlim(0, 10)
+ggsave(filename = "output/01_traditional_fit/autumn_wind_phase_lc_zoi_ytte.png", plot = g_zoi_wind, 
+       width = 20, height = 20, units = "cm", dpi = 300)
+
+# wind dist, phase, and land cover, for places closer to each of the WFs
+wfs <- levels(data_ready_autumn_rsf_2h$wf_name)
+for(i in wfs) {
+  pr_log_wind_phase <- ggpredict(fit_best_zoi, terms = c("wind_turbines_nearest10000", "phase", "landcover_cc"),
+                                 typical = "median", condition = c(wf_name = i))
+  #, condition = c(landcover_cc = "coniferous forests"))
+  pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
+  g_log_wind <- pr_log_wind_phase %>% 
+    plot(show.title = F, limits = c(0,1), colors = cols) +
+    geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+    labs(x = "Distance to wind turbines (km)",
+         y = "Predicted probability of use",
+         colour = "Phase") +
+    xlim(0, 10)
+  ggsave(filename = paste0("output/01_traditional_fit/rsf_autumn_wind_phase_view_", i, ".png"), plot = g_log_wind, 
+         width = 20, height = 8, units = "cm", dpi = 300)
+}
+# pr_wind_phase <- ggpredict(fit9_nolog, terms = c("wind_dist", "phase", "landcover"))
+# g_wind <- pr_wind_phase %>% 
+#   plot(show.title = F, show.x.title = F) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Distance to wind turbines (km)",
+#        y = "Predicted probability of use") +
+#   xlim(0, 10)
+# ggsave(filename = "results/autumn_wind_phase_lc_no_log.png", plot = g_wind, 
+#        width = 20, height = 20, units = "cm", dpi = 300)
+
+#oneimpact::dist_decay
+#oneimpact::exp_decay
+#1 * exp(- lambda * func(x - origin))
+(a <- oneimpact::exp_decay(1000, radius = 1500))
+1500*log(a)/(log(0.05))
+
+# mining
+pr_mining <- ggpredict(fit_best_zoi, terms = c("mining_Krist_nearest10000"))
+#pr_mining$x <- pr_mining$x/1000
+pr_mining$x <- (10000*log(pr_mining$x)/log(0.05))/1000 # in km
+g_mining <- pr_mining %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to mining (km)",
+       y = "Predicted probability of use",
+       color = "Phase") +
+  xlim(0, 15)
+g_mining
+ggsave(filename = "rsf_autumn_mining_zoi.png", plot = g_mining, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# roads
+pr_public_road <- ggpredict(best_fit, terms = c("public_road_dist"))
+pr_public_road$x <- pr_public_road$x/1000
+g_road <- pr_public_road %>%
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to large roads (km)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  xlim(0, 3)
+ggsave(filename = "rsf_autumn_roads.png", plot = g_road,
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# error with NAs
+pr_priv_road <- ggpredict(best_fit, terms = c("priv_road_dist"))
+pr_priv_road$x <- pr_priv_road$x/1000
+g_prov_road <- pr_priv_road %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to small roads (km)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  xlim(0, 1)
+ggsave(filename = "rsf_autumn_private_roads.png", plot = g_prov_road, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+#tab <- do.call(cbind.data.frame, attr(pr_priv_road, "constant.values"))
+#df <- data.frame(priv_road_dist = pr_priv_road$x*1000, tab)
+#df <- data.frame(priv_road_dist = 1, tab)
+#pred <- predict(best_fit, df, type = "link")
+#exp(log(df$priv_road_dist+1)*-0.037344)
+
+# power lines
+pr_pl <- ggpredict(best_fit, terms = c("power_lines_dist"))
+pr_pl$x <- pr_pl$x/1000
+g_pl <- pr_pl %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to power lines (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 10)
+ggsave(filename = "rsf_autumn_pl.png", plot = g_pl, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# trails
+pr_trail <- ggpredict(best_fit, terms = c("trails_dist"))
+pr_trail$x <- pr_trail$x/1000
+g_trail <- pr_trail %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to trails (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 5)
+ggsave(filename = "rsf_autumn_trails.png", plot = g_trail,
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+
+
+# houses
+pr_house <- ggpredict(best_fit, terms = c("house_dist"))
+pr_house$x <- pr_house$x/1000
+g_house <- pr_house %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to houses (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 5)
+ggsave(filename = "rsf_autumn_houses.png", plot = g_trail, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# elevation
+pr_elevation <- ggpredict(best_fit, terms = c("dem"))
+g_elevation <- pr_elevation %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Elevation (m)",
+       y = "Predicted probability of use",
+       color = "Phase") + 
+  xlim(0, NA)
+ggsave(filename = "rsf_autumn_elevation.png", plot = g_elevation, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# tpi
+pr_tpi <- ggpredict(best_fit, terms = c("tpi_cat_s510m"))
+g_tpi <- pr_tpi %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Terrain position index category (150m)",
+       y = "Predicted probability of use",
+       color = "Phase") 
+ggsave(filename = "rsf_autumn_tpi.png", plot = g_tpi, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+#-------
+# spatial prediction
 

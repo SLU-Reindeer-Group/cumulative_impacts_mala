@@ -21,10 +21,9 @@ rm(list = ls())
 # Load packages
 install.load::install_load("tidyverse", "ggridges", "GGally")
 install.load::install_load("broom", "bbmle", "ggeffects")
-install.load::install_load("amt")
 install.load::install_load("glmnet")
 
-library(devtools)
+#library(devtools)
 #devtools::install_github("phuais/multifitR")
 
 #-----------
@@ -56,7 +55,9 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
   log(trails_dist+1) + 
   log(house_dist+1) + log(mining_Krist_dist+1) +
-  wf_name + landcover_cc*phase*log(wind_turbines_dist_comb+1)
+  wf_name + landcover_cc*phase*log(wind_turbines_dist_comb+1)# + 
+  #log(mining_Krist_dist+1):log(wind_turbines_dist_comb+1)
+# Adding an interaction wind*mining explodes the VIF and creates issues with fitting
 
 fit1 <- glm(update(base_formula, ~ . + tpi_cat_s150m), 
             data = data_ready_calving_rsf_2h, #weights = w_obs,
@@ -66,9 +67,10 @@ fit1$formula
 summary(fit1)
 car::vif(fit1)
 
-# backward deletion
+# backward deletion - do not do it now
 # remove cos_aspect
-base_formula2 <- update(base_formula, ~ . - cos_aspect)
+base_formula2 <- base_formula
+#base_formula2 <- update(base_formula, ~ . - cos_aspect)
 fit2 <- glm(update(base_formula2, ~ . + tpi_cat_s150m),
             data = data_ready_calving_rsf_2h, #weights = w_obs,
             family = binomial(link = "logit"))
@@ -124,28 +126,10 @@ summary(fit3)
 best_fit <- fit3
 summary(best_fit)
 
-# prediction
-#cols <- rev(RColorBrewer::brewer.pal(3, "Set1"))
-
-# wind dist, phase, and land cover, for ytteberg
-#pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
-#                               typical = "median", condition = c(wf_name = "ytteberg"))
-#, condition = c(landcover_cc = "coniferous forests"))
-#pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
-#g_log_wind <- pr_log_wind_phase %>% 
-#  plot(show.title = F, colors = cols) +
-#  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-#  labs(x = "Distance to wind turbines (m)",
-#       y = "Predicted probability of use",
-#       colour = "Phase") +
-#  xlim(0, 10)
-#ggsave(filename = "output/01_traditional_fit/calving_wind_phase_view_ytte.png", 
-#       plot = g_log_wind, 
-#       width = 20, height = 10, units = "cm", dpi = 300)
-
 #-------
 # GLM, no threshold regression, using ZoI for wind power and mining
 
+# base formula
 base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
   scale(sos) + 
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
@@ -153,6 +137,7 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(house_dist+1) + scale(mining_Krist_nearestXXX) +
   wf_name + landcover_cc*phase*scale(wind_turbines_ZZZ)
 
+# values for ZOI radii and metrics, TPI scales, and type of land cover variable
 scals <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zois <- c("nearest", "cumulative")
 wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
@@ -161,11 +146,11 @@ lc_var <- c("landcover_cc", "viewshed_lc")
 
 # n models = 7*2*14*3*2 = 1176
 
-# using land cover
+# loop over models
 fits <- tibble::tibble(mining = numeric(), wind = character(), 
                        tpi = character(), lc = character(), 
-                       aic = numeric())
-#models <- list()
+                       aic = numeric(), definition = character())
+
 counter <- 1
 for(i in scals) {
   for(j in wind_scals) {
@@ -180,21 +165,22 @@ for(i in scals) {
     
     print(paste0("mines = ", i, "; wind = ", j, "; tpi = ", tt, 
                  "; lc = ", lc, " up and running..."))
-    fit1 <- glm(form, 
-                data = data_ready_calving_rsf_2h, #weights = w_obs,
-                family = binomial(link = "logit"))
+    # fit1 <- glm(form, 
+    #             data = data_ready_calving_rsf_2h, #weights = w_obs,
+    #             family = binomial(link = "logit"))
     fits[counter,1] <- i
     fits[counter,2] <- j
     fits[counter,3] <- tt
     fits[counter,4] <- lc
-    fits[counter,5] <- AIC(fit1)
+    # fits[counter,5] <- AIC(fit1)
+    fits[counter,6] <- paste(as.character(fit1$formula)[c(2,1,3)], collapse = " ")
     
     counter <- counter+1
   }}}
 }
 
 # save(fits, file = "output/calving_multi_zoi_table.rda")
-load("output/calving_multi_zoi_table.rda")
+load("output/rsf_calving_multi_zoi_table.rda")
 fits
 
 # compare models
@@ -204,24 +190,30 @@ fits
     tibble::tibble(mining = "log", wind = "log", 
                    tpi = "tpi_cat_s150m",
                    lc = "viewshed_lc",
-                   aic = AIC(best_fit))) |>
+                   aic = AIC(best_fit),
+                   definition = paste(as.character(best_fit$formula)[c(2,1,3)], collapse = " "))) |>
   dplyr::mutate(dAIC = abs(aic - min(aic))) |>
   dplyr::arrange(dAIC))
-
-#############
-# Add model definition here!!! and re.export
 
 tab_models |>
   readr::write_csv(file = "output/01_traditional_fit/rsf_calving_AIC_table_complete.csv")
 
+# save(tab_models, file = "output/rsf_calving_multi_zoi_table.rda")
+
+#---------------
+# Re-run best model
+form <- tab_models$definition[1]
+best_fit <- glm(form, 
+                data = data_ready_calving_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+
 #---------------
 # More info, summary, and predictions on the best model
-
 broom::glance(best_fit)
-broom::tidy(best_fit)
+broom::tidy(best_fit) |> print(n = 100)
 
-m1_plot <- broom::tidy(best_fit) %>% 
-  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0))) %>% 
+m1_plot <- broom::tidy(best_fit) |> 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0))) |> 
   ggplot(aes(x = term, y = estimate, color = significant)) +
   geom_point(show.legend = F) +
   # geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
@@ -236,19 +228,27 @@ ggsave("rsf_calving_coefs_log.png", plot = m1_plot, path = "output/01_traditiona
        width = 20, height = 20, units = "cm", dpi = 300)
 
 model_call <- sapply(attr(AICvals_phase, "row.names"), function(x) paste(as.character(formula(eval(as.symbol(x))))[c(2,1,3)], collapse = " "))
-AICvals_phase %>% 
-  dplyr::as_tibble(rownames = "model") %>%
-  dplyr::mutate(definition = unname(model_call)) %>%
+AICvals_phase |> 
+  dplyr::as_tibble(rownames = "model") |>
+  dplyr::mutate(definition = unname(model_call)) |>
   readr::write_csv(file = "output/01_traditional_fit/rsf_calving_AIC_table_log.csv")
 
 summary(best_fit)
-coefs <- broom::tidy(best_fit) %>% 
+coefs <- broom::tidy(best_fit) |> 
   dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
                 p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)))
-coefs %>% 
-  mutate_if(is.numeric, round, digits = 3) %>% 
+coefs |> 
+  mutate_if(is.numeric, round, digits = 3) |> 
   readr::write_csv(file = "output/01_traditional_fit/rsf_calving_coef_table_log.csv")
 
+# Model validation
+# AUC
+library(pROC)
+roc_best_fit <- pROC::roc(data_ready_calving_rsf_2h$case_, fitted(best_fit))
+pROC::auc(roc_best_fit)
+
+
+# CV
 
 #-------------------------------
 # predictions
@@ -265,7 +265,7 @@ plot(pr_slp, lim = c(0, 1)) +
 # pr_wind_general <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase"),
 #                             typical = "median")
 # pr_wind_general$x <- pr_wind_general$x/1000
-# g_wind_general <- pr_wind_general %>% 
+# g_wind_general <- pr_wind_general |> 
 #   plot(limits = c(0,1), show.title = F, show.x.title = F, col = cols) +
 #   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
 #   labs(x = "Distance to wind turbines (km)",
@@ -280,7 +280,7 @@ pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "p
                                typical = "median", condition = c(wf_name = "ytteberg"))
 #, condition = c(landcover_cc = "coniferous forests"))
 pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
-g_log_wind <- pr_log_wind_phase %>% 
+g_log_wind <- pr_log_wind_phase |> 
   plot(show.title = F, col = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to wind turbines (m)",
@@ -298,7 +298,7 @@ for(i in wfs) {
                                  typical = "median", condition = c(wf_name = i))
   #, condition = c(landcover_cc = "coniferous forests"))
   pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
-  g_log_wind <- pr_log_wind_phase %>% 
+  g_log_wind <- pr_log_wind_phase |> 
     plot(show.title = F, limits = c(0,1), colors = cols) +
     geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
     labs(x = "Distance to wind turbines (km)",
@@ -309,7 +309,7 @@ for(i in wfs) {
          width = 20, height = 8, units = "cm", dpi = 300)
 }
 # pr_wind_phase <- ggpredict(fit9_nolog, terms = c("wind_dist", "phase", "landcover"))
-# g_wind <- pr_wind_phase %>% 
+# g_wind <- pr_wind_phase |> 
 #   plot(show.title = F, show.x.title = F) +
 #   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
 #   labs(x = "Distance to wind turbines (km)",
@@ -321,7 +321,7 @@ for(i in wfs) {
 # mining
 pr_mining <- ggpredict(best_fit, terms = c("mining_Krist_dist"))
 pr_mining$x <- pr_mining$x/1000
-g_mining <- pr_mining %>% 
+g_mining <- pr_mining |> 
   plot(show.title = F, show.x.title = F,
        #limits = c(0,1), 
        colors = cols) +
@@ -337,7 +337,7 @@ ggsave(filename = "rsf_calving_mining.png", plot = g_mining,
 # roads
 pr_public_road <- ggpredict(best_fit, terms = c("public_road_dist"))
 pr_public_road$x <- pr_public_road$x/1000
-g_road <- pr_public_road %>%
+g_road <- pr_public_road |>
   plot(show.title = F, show.x.title = F,
        limits = c(0,1), colors = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
@@ -352,7 +352,7 @@ ggsave(filename = "rsf_calving_roads.png", plot = g_road,
 # error with NAs
 pr_priv_road <- ggpredict(best_fit, terms = c("priv_road_dist"))
 pr_priv_road$x <- pr_priv_road$x/1000
-g_prov_road <- pr_priv_road %>% 
+g_prov_road <- pr_priv_road |> 
   plot(show.title = F, show.x.title = F,
        limits = c(0,1), colors = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
@@ -373,7 +373,7 @@ ggsave(filename = "rsf_calving_private_roads.png", plot = g_prov_road,
 # power lines
 pr_pl <- ggpredict(best_fit, terms = c("power_lines_dist"))
 pr_pl$x <- pr_pl$x/1000
-g_pl <- pr_pl %>% 
+g_pl <- pr_pl |> 
   plot(show.title = F, show.x.title = F,
        limits = c(0,1), colors = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
@@ -387,7 +387,7 @@ ggsave(filename = "rsf_calving_pl.png", plot = g_pl,
 # trails
 pr_trail <- ggpredict(best_fit, terms = c("trails_dist"))
 pr_trail$x <- pr_trail$x/1000
-g_trail <- pr_trail %>% 
+g_trail <- pr_trail |> 
   plot(show.title = F, show.x.title = F,
        limits = c(0,1), colors = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
@@ -401,7 +401,7 @@ ggsave(filename = "rsf_calving_trails.png", plot = g_trail,
 # houses
 pr_house <- ggpredict(best_fit, terms = c("house_dist"))
 pr_house$x <- pr_house$x/1000
-g_house <- pr_house %>% 
+g_house <- pr_house |> 
   plot(show.title = F, show.x.title = F,
        limits = c(0,1), colors = cols) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
@@ -414,7 +414,7 @@ ggsave(filename = "rsf_calving_houses.png", plot = g_trail,
 
 # elevation
 pr_elevation <- ggpredict(best_fit, terms = c("dem"))
-g_elevation <- pr_elevation %>% 
+g_elevation <- pr_elevation |> 
   plot(show.title = F, show.x.title = F,
        #limits = c(0,1), 
        colors = cols) +
@@ -429,7 +429,7 @@ ggsave(filename = "rsf_calving_elevation.png", plot = g_elevation,
 
 # tpi
 pr_tpi <- ggpredict(best_fit, terms = c("tpi_cat_s150m"))
-g_tpi <- pr_tpi %>% 
+g_tpi <- pr_tpi |> 
   plot(show.title = F, show.x.title = F,
        #limits = c(0,1), 
        colors = cols) +
@@ -443,6 +443,185 @@ ggsave(filename = "rsf_calving_tpi.png", plot = g_tpi,
 
 #-------
 # spatial prediction
+install.load::install_load("raster", "rasterVis", "terra", "stars")
+
+# vindval data
+load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
+
+# model comparison
+load("output/rsf_calving_multi_zoi_table.rda")
+
+# compare models
+tab_models
+#---------------
+# Re-run best model
+form <- tab_models$definition[1]
+best_fit <- glm(form, 
+                data = data_ready_calving_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+
+#-----------
+# Load maps
+
+maps_predictors <- terra::rast("maps/for_prediction/predictors_after.tif")
+
+best_fit$formula
+names(maps_after)
+
+#----
+# after construction
+maps_after <- maps_predictors
+names(maps_after)[which(names(maps_after) == "sos_after")] <- "sos"
+
+terra::plot(maps_after[[1:16]])
+terra::plot(maps_after[[17:32]])
+prediction_calving_after <- terra::predict(best_fit, maps_after, type = "response")
+
+maps_after_pred <- dem
+terra::values(maps_after_pred) <- prediction_calving_after
+names(maps_after_pred) <- "Operation"
+plot(maps_after_pred)
+
+#---------------
+# other phases
+
+# Before
+maps_before_df <- maps_after_df |> 
+  dplyr::mutate(phase = factor(1, levels = 1:3, 
+                               labels = levels(maps_after_df$phase)))
+
+maps_before_df$sos <- maps_before_df |>
+  dplyr::select(sos_2008:sos_2009) |>
+  apply(MARGIN = 1, mean)
+
+# saveRDS(maps_before_df, file = "maps/for_prediction/maps_before_df.rds")
+
+# During
+maps_during_df <- maps_after_df |> 
+  dplyr::mutate(phase = factor(2, levels = 1:3, 
+                               labels = levels(maps_after_df$phase)))
+
+maps_during_df$sos <- maps_during_df |>
+  dplyr::select(sos_2010:sos_2011) |>
+  apply(MARGIN = 1, mean)
+
+#saveRDS(maps_during_df, file = "maps/for_prediction/maps_during_df.rds")
+
+#--------
+# predict
+
+source("code/06_model_fit/predict_large.R")
+#names(maps_before_df)
+# summary(maps_after_df)
+
+# before
+
+#pred_before_calving <- predict_large(best_fit, maps_before_df, n.parts = 4, type = "response")
+pred_before_calving <- predict(best_fit, maps_before_df, type = "response")
+
+prediction_phase_before_calving <- dem
+values(prediction_phase_before_calving) <- pred_before_calving
+names(prediction_phase_before_calving) <- "Before construction"
+plot(prediction_phase_before_calving)
+
+# during
+# predd_calving <- predict(best_fit_calving, maps_during_df, type = "response")
+rm(list = grep("predb", ls(), value = T))
+
+maps_during_df1 <- maps_during_df |> slice(1:(nrow(maps_during_df)/3))
+predd1_calving <- predict(best_fit_calving, maps_during_df1, type = "response")
+maps_during_df2 <- maps_during_df[(nrow(maps_during_df)/3+1):(2*nrow(maps_during_df)/3),]
+predd2_calving <- predict(best_fit_calving, maps_during_df2, type = "response")
+maps_during_df3 <- maps_during_df[(2*nrow(maps_during_df)/3+1):nrow(maps_during_df),]
+predd3_calving <- predict(best_fit_calving, maps_during_df3, type = "response")
+
+prediction_phase_during_calving <- dem
+prediction_phase_during_calving[] <- c(predd1_calving, predd2_calving, predd3_calving, NA)
+names(prediction_phase_during_calving) <- "Construction"
+plot(prediction_phase_during_calving)
+
+# after
+preda <- predict(best_fit, maps_after_df, type = "response")
+
+maps_after_df1 <- maps_after_df |> slice(1:(nrow(maps_after_df)/3))
+preda1_calving <- predict(best_fit_calving, maps_after_df1, type = "response")
+maps_after_df2 <- maps_after_df[(nrow(maps_after_df)/3+1):(2*nrow(maps_after_df)/3),]
+preda2_calving <- predict(best_fit_calving, maps_after_df2, type = "response")
+maps_after_df3 <- maps_after_df[(2*nrow(maps_after_df)/3+1):nrow(maps_after_df),]
+preda3_calving <- predict(best_fit_calving, maps_after_df3, type = "response")
+
+prediction_phase_after_calving <- dem
+values(prediction_phase_after_calving) <- preda
+names(prediction_phase_after_calving) <- "Operation"
+plot(prediction_phase_after_calving)
+
+# plot
+# png("results/prediction_map_rsf_phase.png", width = 20, height = 20, units = "cm", res = 300)
+# plot(c(prediction_phase_before, prediction_phase_during, prediction_phase_after))
+# dev.off()
+
+# png("results/prediction_map_rsf_phase.png", width = 20, height = 20, units = "cm", res = 300)
+# par(mfrow = c(2,2))
+# plot(prediction_phase_before)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# plot(prediction_phase_during)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# plot(prediction_phase_after)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# dev.off()
+
+names_phase <- c("Before construction", "Construction", "Operation")
+png("results/prediction_map_rsf_phase_calving.png", width = 30, height = 11, units = "cm", res = 300)
+plt <- raster::stack(prediction_phase_before_calving, prediction_phase_during_calving, 
+                     prediction_phase_after_calving) |> 
+  rasterVis::levelplot(par.settings = rasterTheme(region = rev(terrain.colors(n = 100))),
+                       names.attr = names_phase, layout = c(3,1))
+plt + latticeExtra::layer(sp.points(as(turbines[1], "Spatial"), 
+                                    col = "black", cex = 0.4, pch = 4))
+dev.off()
+
+# save maps
+terra::writeRaster(prediction_phase_before_calving, "results/prediction_maps/prediction_rsf_phase_before_calving.tif", 
+                   gdal=c("COMPRESS=DEFLATE", "TFW=YES"), overwrite = T)
+terra::writeRaster(prediction_phase_during_calving, "results/prediction_maps/prediction_rsf_phase_during_calving.tif", 
+                   gdal=c("COMPRESS=DEFLATE", "TFW=YES"), overwrite = T)
+terra::writeRaster(prediction_phase_after_calving, "results/prediction_maps/prediction_rsf_phase_after_calving.tif", 
+                   gdal=c("COMPRESS=DEFLATE", "TFW=YES"), overwrite = T)
+
+
+#import maps calving 
+prediction_phase_before_calving <- terra::rast("results/prediction_maps/prediction_rsf_phase_before_calving.tif")
+prediction_phase_during_calving <- terra::rast("results/prediction_maps/prediction_rsf_phase_during_calving.tif")
+prediction_phase_after_calving <- terra::rast("results/prediction_maps/prediction_rsf_phase_after_calving.tif")
+
+# difference calving ####
+after_minus_before <- prediction_phase_after_calving - prediction_phase_before_calving
+names(after_minus_before) <- "Operation minus Before construction"
+during_minus_before <- prediction_phase_during_calving - prediction_phase_before_calving
+names(during_minus_before) <- "During construction minus Before construction"
+
+png("results/prediction_map_rsf_calving_diff.png", width = 20, height = 20, units = "cm", res = 300)
+plot(raster::stack(prediction_phase_before_calving, during_minus_before, after_minus_before))
+dev.off()
+
+png("results/prediction_map_rsf_calving_diff2.png", width = 25, height = 10, units = "cm", res = 300)
+rasternames <- c("During - Before construction", "Operation - Before construction")
+rasterVis::levelplot(raster::stack(during_minus_before, after_minus_before),
+                     names.attr = rasternames, layout = c(2,1))
+dev.off()
+
+#plot swedish maps  ####
+#FIX THIS WITH NEW MODEL WITHOUT INTERACTION LICHEN*LANDCOVER!!!
+
+names_weather <- c("God vinter", "Medelsvår vinter", "Svår vinter")
+png("results_swe/prediction_map_rsf_weather.png", width = 30, height = 11, units = "cm", res = 300)
+plt <- raster::stack(prediction_weather_good, prediction_weather_medium, prediction_weather_bad) |> 
+  rasterVis::levelplot(par.settings = rasterTheme(region = rev(terrain.colors(n = 100))),
+                       names.attr = names_weather, layout = c(3,1))
+plt + latticeExtra::layer(sp.points(as(turbines[1], "Spatial"), 
+                                    col = "black", cex = 0.4, pch = 4))
+dev.off()
+
 
 #-------
 # define thresholds for distance to the nearest wind turbine

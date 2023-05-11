@@ -247,8 +247,9 @@ library(pROC)
 roc_best_fit <- pROC::roc(data_ready_calving_rsf_2h$case_, fitted(best_fit))
 pROC::auc(roc_best_fit)
 
-
 # CV
+library(boot)
+cv.glm()
 
 #-------------------------------
 # predictions
@@ -462,8 +463,14 @@ best_fit <- glm(form,
 
 #-----------
 # Load maps
-
 maps_predictors <- terra::rast("maps/for_prediction/predictors_after.tif")
+# maps_predictors <- maps_after
+maps_predictors[["dem"]] <- dem
+maps_predictors[["mining_Krist_dist"]] <- mining_dist
+maps_predictors[["wind_turbines_dist_comb"]] <- wind_dist_comb
+vars <- c("public_road_dist", "priv_road_dist", "power_lines_dist", 
+          "trails_dist", "house_dist")
+maps_predictors[[vars]] <- c(public_road_dist, priv_road_dist, pl_dist, trail_dist, house_dist)
 
 best_fit$formula
 names(maps_after)
@@ -472,15 +479,23 @@ names(maps_after)
 # after construction
 maps_after <- maps_predictors
 names(maps_after)[which(names(maps_after) == "sos_after")] <- "sos"
-
 terra::plot(maps_after[[1:16]])
 terra::plot(maps_after[[17:32]])
-prediction_calving_after <- terra::predict(best_fit, maps_after, type = "response")
 
-maps_after_pred <- dem
-terra::values(maps_after_pred) <- prediction_calving_after
-names(maps_after_pred) <- "Operation"
-plot(maps_after_pred)
+maps_after_df <- as.data.frame(maps_after, xy = TRUE, cell = TRUE, na.rm = FALSE)
+str(maps_after_df)
+
+pred_calv_after <- terra::predict(best_fit, maps_after_df, type = "response")
+
+#maps_after_pred <- as.data.frame(terra::rast(dem), xy = TRUE, cell = TRUE, na.rm = FALSE)
+map_after_pred <- terra::rast(dem)
+terra::values(map_after_pred) <- pred_calv_after
+names(map_after_pred) <- "Operation"
+terra::plot(map_after_pred)
+rasterVis::levelplot(map_after_pred)
+terra::writeRaster(map_after_pred, filename = "output/map_prediction_calving_after.tif")
+
+#prediction_calving_after <- terra::predict(best_fit, maps_after, type = "response")
 
 #---------------
 # other phases

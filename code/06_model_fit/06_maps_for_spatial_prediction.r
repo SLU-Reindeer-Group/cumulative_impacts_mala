@@ -258,12 +258,12 @@ if(plot_maps) terra::plot(viewshed_lc, legend = "topright")
 #--------
 # prepare maps 
 
-maps_after <- c(phase, dem, slope, cos_aspect, tpi_cat_s150m, 
+maps_predictors <- c(phase, dem, slope, cos_aspect, tpi_cat_s150m, 
                 sos_all, sos_after, sos_during, sos_before,
                 landcover, landcover_cc, clear_cuts, viewshed_jsy15km, viewshed_lc,
                 public_road_dist, priv_road_dist, pl_dist, trail_dist,
                 house_dist, mining_dist, wind_dist_comb, wf_name)
 
 # add relevant ZOI variables
-terra::writeRaster(maps_after, filename = "maps/for_prediction/predictors_after.tif", 
-                   gdal = c("COMPRESS=DEFLATE", "TFW=YES"), overwrite = TRUE)
+terra::writeRaster(maps_predictors, filename = "maps/for_prediction/predictors_calving_after.tif", 
+                   overwrite = TRUE)

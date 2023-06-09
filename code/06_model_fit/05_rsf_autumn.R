@@ -680,3 +680,19 @@ ggsave(filename = "rsf_autumn_tpi.png", plot = g_tpi,
 #-------
 # spatial prediction
 
+install.load::install_load("raster", "rasterVis", "terra", "stars")
+
+# vindval data
+load(file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_rsf.RData")
+
+# model comparison
+load("output/rsf_autumn_multi_zoi_table.rda")
+
+# compare models
+tab_models
+#---------------
+# Re-run best model
+form <- tab_models$definition[1]
+best_fit <- glm(form, 
+                data = data_ready_calving_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))

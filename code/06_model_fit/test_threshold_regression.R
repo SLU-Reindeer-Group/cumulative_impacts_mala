@@ -643,3 +643,4 @@ w6 <- wind_turbines_cumulative10000
 # 2.5) Operationalize the predictions of these models
 # 3) Include interactions land cover or viewshed and interpret
 # 4) Make predictions on maps
+

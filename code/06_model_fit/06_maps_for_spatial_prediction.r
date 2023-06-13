@@ -1,20 +1,22 @@
+library(tidyverse)
+
 # spatial prediction
 install.load::install_load("raster", "rasterVis", "terra", "stars")
-
+# 
 # vindval data
 load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
-
-# model comparison
-load("output/rsf_calving_multi_zoi_table.rda")
-
-# compare models
-tab_models
-#---------------
-# Re-run best model
-form <- tab_models$definition[1]
-best_fit <- glm(form, 
-                data = data_ready_calving_rsf_2h, #weights = w_obs,
-                family = binomial(link = "logit"))
+# 
+# # model comparison
+# load("output/rsf_calving_multi_zoi_table.rda")
+# 
+# # compare models
+# tab_models
+# #---------------
+# # Re-run best model
+# form <- tab_models$definition[1]
+# best_fit <- glm(form, 
+#                 data = data_ready_calving_rsf_2h, #weights = w_obs,
+#                 family = binomial(link = "logit"))
 
 #-----------
 #' # Load maps
@@ -168,6 +170,11 @@ values(wind_dist_comb) <- pmin(values(wind_dist_jsy), values(wind_dist_aml))
 if(plot_maps) plot(wind_dist_comb)
 names(wind_dist_comb) <- "wind_turbines_dist_comb"
 
+# wind_turbines_nearest10000
+wind_turbines_nearest10000 <- terra::rast("maps/wind_turbines_bin_zoi_nearest_exp_decay10000.tif")
+names(wind_turbines_nearest10000) <- "wind_turbines_nearest10000"
+if(plot_maps) plot(wind_turbines_nearest10000)
+
 # wf name
 wf_name <- wind_dist_jsy
 vals <- apply(cbind(values(wind_dist_jokk), values(wind_dist_stor), values(wind_dist_ytte), values(wind_dist_aml)), 1, which.min)
@@ -187,13 +194,18 @@ if(plot_maps) plot(public_road_dist)
 
 # pl dist
 pl_dist <- terra::rast("maps/power_lines_dist.tif")
-if(plot_maps) plot(pl_dist)
 names(pl_dist) <- "power_lines_dist"
+if(plot_maps) plot(pl_dist)
+
 
 # mining dist
 mining_dist <- terra::rast("maps/mining_Krist_dist.tif")
-if(plot_maps) plot(mining_dist)
 names(mining_dist) <- "mining_Krist_dist"
+if(plot_maps) plot(mining_dist)
+
+mining_Krist_nearest10000 <- terra::rast("maps/mining_Krist_bin_zoi_nearest_exp_decay10000.tif")
+names(mining_Krist_nearest10000) <- "mining_Krist_nearest10000"
+if(plot_maps) plot(mining_Krist_nearest10000)
 
 # small roads
 priv_road_dist <- terra::rast("maps/priv_road_dist.tif")
@@ -235,6 +247,41 @@ names(sos_during) <- "sos_during"
 sos_before <- terra::app(sos_all[[grepl("2008|2009", names(sos_all))]], mean)
 names(sos_before) <- "sos_before"
 
+# sos
+sos_beck <- stars::read_stars(.x = "maps/ndvi/ok/sos_beck.tif")
+sos_elmore <- stars::read_stars(.x = "maps/ndvi/ok/sos_elmore.tif")
+
+# monthday
+md <- "0501"
+
+
+# eos
+eos_beck <- stars::read_stars(.x = "maps/ndvi/ok/eos_beck.tif")
+eos_elmore <- stars::read_stars(.x = "maps/ndvi/ok/eos_elmore.tif")
+
+# end of season maps
+eos_data <- attr(eos_beck, "dimensions")$band$values
+eos_maps <- c(eos_beck[,,,eos_data], eos_elmore[,,,eos_data]) |>
+  dplyr::mutate(eos = (eos_beck.tif + eos_elmore.tif)/2) |>
+  dplyr::select(eos) |>
+  dplyr::filter(band >= 2008, band <= 2018)
+
+# transform to terra and reproject
+eos_all <- terra::rast(eos_maps) |>
+  terra::project(dem)
+
+# select years eos
+eos_after <- terra::app(eos_all[[grepl("2015|2016|2017|2018", names(eos_all))]], mean)
+names(eos_after) <- "eos_after"
+
+eos_during <- terra::app(eos_all[[grepl("2010|2011", names(eos_all))]], mean)
+names(eos_during) <- "eos_during"
+
+eos_before <- terra::app(eos_all[[grepl("2008|2009", names(eos_all))]], mean)
+names(eos_before) <- "eos_before"
+
+
+
 # viewshed
 viewshed_jsy15km <- terra::rast("maps/viewshed_jsy15km.tif") |>
   terra::project(dem)
@@ -258,12 +305,39 @@ if(plot_maps) terra::plot(viewshed_lc, legend = "topright")
 #--------
 # prepare maps 
 
-maps_predictors <- c(phase, dem, slope, cos_aspect, tpi_cat_s150m, 
-                sos_all, sos_after, sos_during, sos_before,
-                landcover, landcover_cc, clear_cuts, viewshed_jsy15km, viewshed_lc,
-                public_road_dist, priv_road_dist, pl_dist, trail_dist,
-                house_dist, mining_dist, wind_dist_comb, wf_name)
+maps_predictors <-
+  c(
+    phase,
+    dem,
+    slope,
+    cos_aspect,
+    tpi_cat_s150m,
+    tpi_cat_s250m,
+    tpi_cat_s510m,
+    # sos_all,
+    sos_after,
+    sos_during,
+    sos_before,
+    eos_after,
+    eos_during,
+    eos_before,
+    landcover,
+    landcover_cc,
+    clear_cuts,
+    viewshed_jsy15km,
+    viewshed_lc,
+    public_road_dist,
+    priv_road_dist,
+    pl_dist,
+    trail_dist,
+    house_dist,
+    mining_dist,
+    mining_Krist_nearest10000,
+    wind_dist_comb,
+    wind_turbines_nearest10000,
+    wf_name
+  )
 
 # add relevant ZOI variables
-terra::writeRaster(maps_predictors, filename = "maps/for_prediction/predictors_calving_after.tif", 
+terra::writeRaster(maps_predictors, filename = "maps/for_prediction/predictors.tif", 
                    overwrite = TRUE)

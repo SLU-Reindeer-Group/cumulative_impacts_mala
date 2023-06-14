@@ -102,6 +102,7 @@ terra::writeRaster(map_pred_autumn_before_construction, filename = "output/map_p
 rm(pred_autumn_before_construction)
 rm(map_pred_autumn_before_construction)
 
+rm(maps_before_df)
 
 #####################
 
@@ -147,6 +148,8 @@ terra::writeRaster(map_pred_autumn_construction, filename = "output/map_predicti
 rm(pred_autumn_construction)
 rm(map_pred_autumn_construction)
 
+rm(maps_during_df)
+
 #####################
 
 # After construction / operation --------------------------------
@@ -190,6 +193,8 @@ terra::writeRaster(map_pred_autumn_operation, filename = "output/map_prediction_
 
 rm(pred_autumn_operation)
 rm(map_pred_autumn_operation)
+
+rm(maps_after_df)
 
 #############################
 # plot

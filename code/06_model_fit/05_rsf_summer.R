@@ -21,7 +21,7 @@ install.load::install_load("tidyverse", "ggridges", "GGally")
 install.load::install_load("broom", "bbmle", "ggeffects")
 install.load::install_load("glmnet")
 
-library(devtools)
+# library(devtools)
 # devtools::install_github("phuais/multifitR")
 
 #-----------
@@ -86,35 +86,35 @@ fit2.3 <- glm(update(base_formula2, ~ . + tpi_cat_s510m),
 # formula_summer3 <- update(base_formula2, ~ . + tpi_cat_s150m - 
 #                              landcover_cc*phase*log(wind_dist_jsy+1) +
 #                              viewshed_lc*phase*log(wind_dist_jsy+1))
-base_formula3 <- update(base_formula2, ~ . + tpi_cat_s150m -
-                             landcover_cc*phase*log(wind_turbines_dist_comb+1) +
-                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
-base_formula3.2 <- update(base_formula2, ~ . + tpi_cat_s250m -
-                             landcover_cc*phase*log(wind_turbines_dist_comb+1) +
-                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
-base_formula3.3 <- update(base_formula2, ~ . + tpi_cat_s510m -
-                             landcover_cc*phase*log(wind_turbines_dist_comb+1) +
-                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
-
-fit3 <- glm(base_formula3,
-            data = data_ready_summer_rsf_2h, #weights = w_obs,
-            family = binomial(link = "logit"))
-fit3.2 <- glm(base_formula3.2,
-            data = data_ready_summer_rsf_2h, #weights = w_obs,
-            family = binomial(link = "logit"))
-fit3.3 <- glm(base_formula3.3,
-            data = data_ready_summer_rsf_2h, #weights = w_obs,
-            family = binomial(link = "logit"))
-
-car::vif(fit3)
-summary(fit3)
-
-# compare
-(AICvals_phase <- bbmle::AICtab(fit2, fit2.2, fit2.3, 
-                                fit3, fit3.2, fit3.3, weights = T, base = T))
+# base_formula3 <- update(base_formula2, ~ . + tpi_cat_s150m -
+#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+# base_formula3.2 <- update(base_formula2, ~ . + tpi_cat_s250m -
+#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+# base_formula3.3 <- update(base_formula2, ~ . + tpi_cat_s510m -
+#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+# 
+# fit3 <- glm(base_formula3,
+#             data = data_ready_summer_rsf_2h, #weights = w_obs,
+#             family = binomial(link = "logit"))
+# fit3.2 <- glm(base_formula3.2,
+#             data = data_ready_summer_rsf_2h, #weights = w_obs,
+#             family = binomial(link = "logit"))
+# fit3.3 <- glm(base_formula3.3,
+#             data = data_ready_summer_rsf_2h, #weights = w_obs,
+#             family = binomial(link = "logit"))
+# 
+# car::vif(fit3)
+# summary(fit3)
+# 
+# # compare
+# (AICvals_phase <- bbmle::AICtab(fit2, fit2.2, fit2.3, 
+#                                 fit3, fit3.2, fit3.3, weights = T, base = T))
 
 # best model
-best_fit <- fit3.3
+best_fit <- fit2.3
 summary(best_fit)
 
 #-------
@@ -133,9 +133,9 @@ scals <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zois <- c("nearest", "cumulative")
 wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
 tpi_scals <- c("tpi_cat_s150m", "tpi_cat_s250m", "tpi_cat_s510m")
-lc_var <- c("landcover_cc", "viewshed_lc")
+lc_var <- c("landcover_cc")#, "viewshed_lc")
 
-# n models = 7*2*14*3*2 = 1176
+# n models = 7*2*14*3*1 = 588
 
 # loop over models
 fits <- tibble::tibble(mining = numeric(), wind = character(), 
@@ -164,7 +164,7 @@ for(i in scals) {
     fits[counter,3] <- tt
     fits[counter,4] <- lc
     fits[counter,5] <- AIC(fit1)
-    fits[counter,6] <- paste(as.character(fit1$formula)[c(2,1,3)], collapse = " ")
+    fits[counter,6] <- paste(as.character(form)[c(2,1,3)], collapse = " ")
     
     counter <- counter+1
   }}}
@@ -180,7 +180,7 @@ fits
   dplyr::bind_rows(
     tibble::tibble(mining = "log", wind = "log", 
                    tpi = "tpi_cat_s510m",
-                   lc = "viewshed_lc",
+                   lc = "landcover_cc",
                    aic = AIC(best_fit),
                    definition = paste(as.character(best_fit$formula)[c(2,1,3)], collapse = " "))) |>
   dplyr::mutate(dAIC = abs(aic - min(aic))) |>
@@ -194,10 +194,10 @@ tab_models |>
 
 #---------------
 # Re-run best model
-load("output/summer_multi_zoi_table.rda")
+load("output/rsf_summer_multi_zoi_table_landcover.rda")
 tab_models
 
-form <- tab_models$definition[1]
+form <- tab_models$definition[2]
 best_fit <- glm(form, 
                 data = data_ready_summer_rsf_2h, #weights = w_obs,
                 family = binomial(link = "logit"))
@@ -255,7 +255,7 @@ plot(pr_slp, lim = c(0, 1)) +
 #                             typical = "median")
 # pr_wind_general$x <- pr_wind_general$x/1000
 # g_wind_general <- pr_wind_general %>% 
-#   plot(limits = c(0,1), show.title = F, show.x.title = F, col = cols) +
+#   plot(limits = c(0,1), show_title = F, show_x_title = F, col = cols) +
 #   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
 #   labs(x = "Distance to wind turbines (km)",
 #        y = "Predicted probability of use",
@@ -265,60 +265,73 @@ plot(pr_slp, lim = c(0, 1)) +
 #        width = 15, height = 12, units = "cm", dpi = 300)
 
 # wind dist, phase, and land cover, for ytteberg
-pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
-                               typical = "median", condition = c(wf_name = "ytteberg"))
+pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc"),
+                           typical = "median", condition = c(wf_name = "ytteberg"))
 #, condition = c(landcover_cc = "coniferous forests"))
-pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
-g_log_wind <- pr_log_wind_phase %>% 
-  plot(show.title = F, col = cols) +
-  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+zoi_limit <- 0.05; radius <- 10000
+lambda <- log(1/zoi_limit) / radius
+pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
+pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+
+g_wind <- pr_wind_phase_df |>
+  plot(show_title = FALSE, 
+       colors = cols) +
+  # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to wind turbines (m)",
        y = "Predicted probability of use",
        colour = "Phase") +
-  #ylim(0, 1) +
-  xlim(0, 10)
-ggsave(filename = "output/01_traditional_fit/summer_wind_phase_view_ytte.png", plot = g_log_wind, 
-       width = 20, height = 10, units = "cm", dpi = 300)
+  ylim(0.05, 0.2) +
+  xlim(0, 5)
+g_wind
+
+ggsave(filename = "output/01_traditional_fit/summer_wind_phase_landcc_ytte.png", plot = g_wind,
+       width = 20, height = 20, units = "cm", dpi = 300)
 
 # wind dist, phase, and land cover, for places closer to each of the WFs
 wfs <- levels(data_ready_summer_rsf_2h$wf_name)
 for(i in wfs) {
-  pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
-                                 typical = "median", condition = c(wf_name = i))
+  
+  print(i)
+  pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc"),
+                             typical = "median", condition = c(wf_name = i))
   #, condition = c(landcover_cc = "coniferous forests"))
-  pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
-  g_log_wind <- pr_log_wind_phase %>% 
-    plot(show.title = F, limits = c(0,1), colors = cols) +
+  zoi_limit <- 0.05; radius <- 10000
+  lambda <- log(1/zoi_limit) / radius
+  pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
+  pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+  
+  g_wind <- pr_wind_phase_df |>
+    plot(show_title = FALSE, colors = cols) +
     geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-    labs(x = "Distance to wind turbines (km)",
-         y = "Predicted probability of use",
+    geom_vline(xintercept = 5, linetype = 2, color = "grey") +
+    labs(x = "Distance to wind turbines (m)",
+         y = "Relative probability of use",
          colour = "Phase") +
+    #ylim(0, 1) +
     xlim(0, 10)
-  ggsave(filename = paste0("output/01_traditional_fit/rsf_summer_wind_phase_view_", i, ".png"), plot = g_log_wind, 
-         width = 20, height = 8, units = "cm", dpi = 300)
+  g_wind
+  
+  ggsave(filename = paste0("output/01_traditional_fit/rsf_summer_wind_phase_landcc_", i, ".png"), plot = g_wind, 
+         width = 20, height = 20, units = "cm", dpi = 300)
+  
 }
-# pr_wind_phase <- ggpredict(fit9_nolog, terms = c("wind_dist", "phase", "landcover"))
-# g_wind <- pr_wind_phase %>% 
-#   plot(show.title = F, show.x.title = F) +
-#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-#   labs(x = "Distance to wind turbines (km)",
-#        y = "Predicted probability of use") +
-#   xlim(0, 10)
-# ggsave(filename = "results/summer_wind_phase_lc_no_log.png", plot = g_wind, 
-#        width = 20, height = 20, units = "cm", dpi = 300)
 
 # mining
-pr_mining <- ggpredict(best_fit, terms = c("mining_Krist_dist"))
-pr_mining$x <- pr_mining$x/1000
-g_mining <- pr_mining %>% 
-  plot(show.title = F, show.x.title = F,
-       #limits = c(0,1), 
-       colors = cols) +
+pr_mining <- ggpredict(best_fit, terms = c("mining_Krist_nearest10000"))
+zoi_limit <- 0.05; radius <- 10000
+lambda <- log(1/zoi_limit) / radius
+pr_mining$x <- -log(pr_mining$x)/lambda/1000
+g_mining <- pr_mining |> 
+  plot(show_title = F, show_x_title = F,
+       limits = c(0,NA), 
+       # colors = cols
+  ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to mining (km)",
-       y = "Predicted probability of use",
+       y = "Relative probability of use",
        color = "Phase") +
   xlim(0, 20)
+g_mining
 ggsave(filename = "rsf_summer_mining.png", plot = g_mining, 
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
@@ -327,31 +340,34 @@ ggsave(filename = "rsf_summer_mining.png", plot = g_mining,
 pr_public_road <- ggpredict(best_fit, terms = c("public_road_dist"))
 pr_public_road$x <- pr_public_road$x/1000
 g_road <- pr_public_road %>%
-  plot(show.title = F, show.x.title = F,
-       limits = c(0,1), colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0,NA), 
+       #colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to large roads (km)",
        y = "Predicted probability of use",
        colour = "Phase") +
   xlim(0, 3)
+g_road
 ggsave(filename = "rsf_summer_roads.png", plot = g_road,
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
 
 # error with NAs
-pr_priv_road <- ggpredict(best_fit, terms = c("priv_road_dist"))
-pr_priv_road$x <- pr_priv_road$x/1000
-g_prov_road <- pr_priv_road %>% 
-  plot(show.title = F, show.x.title = F,
-       limits = c(0,1), colors = cols) +
-  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-  labs(x = "Distance to small roads (km)",
-       y = "Predicted probability of use",
-       colour = "Phase") +
-  xlim(0, 1)
-ggsave(filename = "rsf_summer_private_roads.png", plot = g_prov_road, 
-       path = "output/01_traditional_fit/",
-       width = 15, height = 12, units = "cm", dpi = 300)
+# pr_priv_road <- ggpredict(best_fit, terms = c("priv_road_dist"))
+# pr_priv_road$x <- pr_priv_road$x/1000
+# g_prov_road <- pr_priv_road %>% 
+#   plot(show_title = F, show_x_title = F,
+#        limits = c(0,1), colors = cols) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Distance to small roads (km)",
+#        y = "Predicted probability of use",
+#        colour = "Phase") +
+#   xlim(0, 1)
+# ggsave(filename = "rsf_summer_private_roads.png", plot = g_prov_road, 
+#        path = "output/01_traditional_fit/",
+#        width = 15, height = 12, units = "cm", dpi = 300)
 
 #tab <- do.call(cbind.data.frame, attr(pr_priv_road, "constant.values"))
 #df <- data.frame(priv_road_dist = pr_priv_road$x*1000, tab)
@@ -363,12 +379,15 @@ ggsave(filename = "rsf_summer_private_roads.png", plot = g_prov_road,
 pr_pl <- ggpredict(best_fit, terms = c("power_lines_dist"))
 pr_pl$x <- pr_pl$x/1000
 g_pl <- pr_pl %>% 
-  plot(show.title = F, show.x.title = F,
-       limits = c(0,1), colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0, NA), 
+       #colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to power lines (km)",
        y = "Predicted probability of use") +
   xlim(0, 10)
+g_pl
 ggsave(filename = "rsf_summer_pl.png", plot = g_pl, 
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
@@ -377,12 +396,15 @@ ggsave(filename = "rsf_summer_pl.png", plot = g_pl,
 pr_trail <- ggpredict(best_fit, terms = c("trails_dist"))
 pr_trail$x <- pr_trail$x/1000
 g_trail <- pr_trail %>% 
-  plot(show.title = F, show.x.title = F,
-       limits = c(0,1), colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0, NA), 
+       #colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to trails (km)",
        y = "Predicted probability of use") +
   xlim(0, 5)
+g_trail
 ggsave(filename = "rsf_summer_trails.png", plot = g_trail,
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
@@ -391,12 +413,15 @@ ggsave(filename = "rsf_summer_trails.png", plot = g_trail,
 pr_house <- ggpredict(best_fit, terms = c("house_dist"))
 pr_house$x <- pr_house$x/1000
 g_house <- pr_house %>% 
-  plot(show.title = F, show.x.title = F,
-       limits = c(0,1), colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0, NA), 
+       #colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Distance to houses (km)",
        y = "Predicted probability of use") +
   xlim(0, 5)
+g_house
 ggsave(filename = "rsf_summer_houses.png", plot = g_trail, 
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
@@ -404,14 +429,16 @@ ggsave(filename = "rsf_summer_houses.png", plot = g_trail,
 # elevation
 pr_elevation <- ggpredict(best_fit, terms = c("dem"))
 g_elevation <- pr_elevation %>% 
-  plot(show.title = F, show.x.title = F,
-       #limits = c(0,1), 
-       colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0, NA), 
+       #colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Elevation (m)",
        y = "Predicted probability of use",
-       color = "Phase") + 
-  xlim(0, NA)
+       color = "Phase")# + 
+  # xlim(0, NA)
+g_elevation
 ggsave(filename = "rsf_summer_elevation.png", plot = g_elevation, 
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
@@ -419,9 +446,10 @@ ggsave(filename = "rsf_summer_elevation.png", plot = g_elevation,
 # tpi
 pr_tpi <- ggpredict(best_fit, terms = c("tpi_cat_s510m"))
 g_tpi <- pr_tpi %>% 
-  plot(show.title = F, show.x.title = F,
-       #limits = c(0,1), 
-       colors = cols) +
+  plot(show_title = F, show_x_title = F,
+       limits = c(0, NA), 
+       # colors = cols
+       ) +
   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
   labs(x = "Terrain position index category (150m)",
        y = "Predicted probability of use",
@@ -430,9 +458,213 @@ ggsave(filename = "rsf_summer_tpi.png", plot = g_tpi,
        path = "output/01_traditional_fit/",
        width = 15, height = 12, units = "cm", dpi = 300)
 
+# SOS
+# pr_sos <- ggpredict(best_fit, terms = c("sos"))
+# g_sos <- pr_sos %>% 
+#   plot(show_title = F, show_x_title = F,
+#        limits = c(0, NA), 
+#        # colors = cols
+#   ) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Start of growing season (doy)",
+#        y = "Predicted probability of use") 
+# g_sos
+# ggsave(filename = "rsf_summer_tpi.png", plot = g_tpi, 
+#        path = "output/01_traditional_fit/",
+#        width = 15, height = 12, units = "cm", dpi = 300)
+
 #-------
 # spatial prediction
 
+install.load::install_load("raster", "rasterVis", "terra", "arrow")
+
+# vindval data
+load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_rsf.RData")
+
+# model comparison
+load("output/rsf_summer_multi_zoi_table_landcover.rda")
+
+# compare models
+tab_models
+
+#---------------
+# Re-run best model
+form <- tab_models$definition[2]
+best_fit <- glm(form, 
+                data = data_ready_summer_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+
+#-----------
+# Load maps
+maps_df <- arrow::read_parquet("maps/for_prediction/predictors.parquet")
+str(maps_df)
+
+template_map <- terra::vect("maps/availability_mala_late_summer.gpkg")
+
+# set sos and eos to match phase
+maps_before_df <- maps_df |> 
+  dplyr::rename(eos=eos_before, sos=sos_before)
+maps_before_df$phase <- ifelse(maps_before_df$phase == "Operation", "Before construction", maps_before_df$phase) |> 
+  factor(levels = levels(maps_df$phase))
+unique(maps_before_df$phase)
+# predict
+pred_summer_before_construction <- predict(best_fit, maps_before_df, type = "response")
+# create raster
+maps_before_df$pred_calv_before <- pred_summer_before_construction
+str(maps_before_df)
+# fill raster with predicted values
+map_pred_summer_before_construction <- maps_before_df |> 
+  dplyr::select(x, y, pred_calv_before) |> 
+  terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
+  terra::mask(mask = template_map)
+
+names(map_pred_summer_before_construction) <- "summer_before_construction"
+terra::plot(map_pred_summer_before_construction)
+terra::writeRaster(map_pred_summer_before_construction, filename = "output/spatial_predictions/rsf_map_prediction_summer_before_construction_phaseonly.tif", 
+                   gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
+
+rm(pred_summer_before_construction)
+
+# summer during/construction --------------------------------
+
+# set sos and eos to match phase
+maps_during_df <- maps_df |>
+  dplyr::rename(eos=eos_before, sos=sos_before) # remove differences due to nvdi
+# dplyr::rename(eos=eos_during, sos=sos_during)
+maps_during_df$phase <- ifelse(maps_during_df$phase == "Operation", "Construction", maps_during_df$phase) |> 
+  factor(levels = levels(maps_df$phase))
+unique(maps_during_df$phase)
+# predict
+pred_summer_construction <- predict(best_fit, maps_during_df, type = "response")
+# create raster
+maps_during_df$pred_calv_during <- pred_summer_construction
+str(maps_during_df)
+# fill raster with predicted values
+map_pred_summer_construction <- maps_during_df |> 
+  dplyr::select(x, y, pred_calv_during) |> 
+  terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
+  terra::mask(mask = template_map)
+
+names(map_pred_summer_construction) <- "summer_construction"
+terra::plot(map_pred_summer_construction)
+terra::writeRaster(map_pred_summer_construction, filename = "output/spatial_predictions/rsf_map_prediction_summer_construction_phaseonly.tif", 
+                   gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
+
+rm(pred_summer_construction)
+
+# summer operation/after --------------------------------
+
+# set sos and eos to match phase
+maps_after_df <- maps_df |> 
+  dplyr::rename(eos=eos_before, sos=sos_before) # remove differences due to nvdi
+# dplyr::rename(eos=eos_after, sos=sos_after)
+unique(maps_after_df$phase)
+# predict
+pred_summer_operation <- terra::predict(best_fit, maps_after_df, type = "response")
+# create raster
+maps_after_df$pred_calv_after <- pred_summer_operation
+str(maps_after_df)
+# fill raster with predicted values
+map_pred_summer_operation <- maps_after_df |> 
+  dplyr::select(x, y, pred_calv_after) |> 
+  terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
+  terra::mask(mask = template_map)
+
+names(map_pred_summer_operation) <- "summer_operation"
+terra::plot(map_pred_summer_operation)
+terra::writeRaster(map_pred_summer_operation, filename = "output/spatial_predictions/rsf_map_prediction_summer_operation_phaseonly.tif", 
+                   gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
+
+rm(pred_summer_operation)
+
+#----
+# plot maps
+
+install.load::install_load("raster", "rasterVis", "terra", "arrow")
+library(tmap)
+
+# read maps
+f_m <- list.files("output/spatial_predictions/", pattern = "summer", full.names = TRUE) |> 
+  grep(pattern = ".tif$", value = TRUE) |> 
+  grep(pattern = "phaseonly", value = TRUE)
+
+maps_summer <- terra::rast(f_m)
+
+# plot
+# png("results/prediction_map_rsf_phase.png", width = 20, height = 20, units = "cm", res = 300)
+# plot(maps_summer)
+# dev.off()
+
+# png("results/prediction_map_rsf_phase.png", width = 20, height = 20, units = "cm", res = 300)
+# par(mfrow = c(2,2))
+# plot(prediction_phase_before)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# plot(prediction_phase_during)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# plot(prediction_phase_after)
+# plot(as(turbines[1], "Spatial"), add = T, pch = 4, cex = 0.5)
+# dev.off()
+
+# names_phase <- c("Before construction", "Construction", "Operation")
+# png("results/prediction_map_rsf_phase_summer.png", width = 30, height = 11, units = "cm", res = 300)
+# plt <- maps_summer |> 
+#   rasterVis::levelplot(par.settings = rasterTheme(region = rev(terrain.colors(n = 100))),
+#                        names.attr = names_phase, layout = c(3,1))
+# plt + latticeExtra::layer(sp.points(as(turbines[1], "Spatial"), 
+#                                     col = "black", cex = 0.4, pch = 4))
+# dev.off()
+
+# library(tmaptools)
+# tmaptools::palette_explorer()
+
+tmap_options(max.raster = c(plot = 5000, view = 2000))
+
+map_before <- maps_summer[[1]]
+map_before$summer_before_construction@ptr$range_max
+p_maps_summer_before <- tmap::tm_shape(map_before) +
+  tmap::tm_raster(palette = "Greens", style = "cont", title = "") +#breaks = seq(0, 0.6, by = 0.05)) +
+  tmap::tm_layout(title = "Baseline habitat suitability in summer\n(before wind turbines)", legend.outside = TRUE)
+p_maps_summer_before
+
+# difference summer ####
+after_minus_before <- terra::diff(maps_summer[[c(1,3)]])
+names(after_minus_before) <- "Before construction -> Operation"
+# plot(after_minus_before)
+during_minus_before <- terra::diff(maps_summer[[c(1,2)]])
+names(during_minus_before) <- "Before construction -> Construction"
+
+# absolute difference RSF
+maps_summer_diff <- c(during_minus_before, after_minus_before)
+tmap::tm_shape(maps_summer_diff) +
+  tmap::tm_raster(palette = "PRGn", style = "cont") +
+  tmap::tm_layout()
+
+maps_summer_prop <- 100*maps_summer_diff/maps_summer[[1]]
+# maps_summer_prop <- terra::ifel(maps_summer_prop > )
+p_maps_summer_diff <- tmap::tm_shape(maps_summer_prop) +
+  tmap::tm_raster(palette = "PRGn", #style = "quantile")
+                  breaks = c(-75, -50, -30, -10, 0, 10, 30, 50, 75),
+                  title = "Change in suitability (%)") +
+  tmap::tm_facets(ncol = 2)
+p_maps_summer_diff
+
+p_maps_summer <- tmap::tmap_arrange(p_maps_summer_before, p_maps_summer_diff,
+                                     ncol = 1, nrow = 2)
+p_maps_summer
+
+# Add polygon mining and polygon 5km + crosses for turbines in maps
+# Add scale and north
+tmap::tmap_save(p_maps_summer, filename = "output/01_traditional_fit/maps_summer.png", 
+                width = 20, height = 20, units = "cm", dpi = 300)
+
+# write maps difference
+maps_summer_diff |> 
+  terra::writeRaster(filename = "output/spatial_predictions/map_difference_rsf_summer.tif",
+                     gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
+
+maps_summer_prop |> 
+  terra::writeRaster(filename = "output/spatial_predictions/map_difference_prop_summer.tif",
+                     gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 
 

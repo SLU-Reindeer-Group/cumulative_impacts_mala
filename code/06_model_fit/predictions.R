@@ -1,23 +1,22 @@
-library(tidyverse)
+library(dplyr)
 
 # spatial prediction
 install.load::install_load("raster", "rasterVis", "terra", "stars")
+library(arrow)
 
 # vindval data
 load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
-load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_rsf.RData")
-load(file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_rsf.RData")
-
+# load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_rsf.RData")
+# load(file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_rsf.RData")
 
 # load maps
-maps <- terra::rast("maps/for_prediction/predictors.tif")
-
-# terra::plot(maps[[1:16]])
-# terra::plot(maps[[17:32]])
-
-maps_df <- as.data.frame(maps, xy = TRUE, cell = TRUE, na.rm = FALSE)
-str(maps_df)
-
+# maps <- terra::rast("maps/for_prediction/predictors_calving_after.tif")
+# 
+# # terra::plot(maps[[1:16]])
+# # terra::plot(maps[[17:32]])
+# maps_df <- as.data.frame(maps, xy = TRUE, cell = TRUE, na.rm = FALSE)
+# str(maps_df)
+maps_df <- arrow::read_parquet("maps/for_prediction/predictors.parquet")
 
 # load models
 
@@ -27,7 +26,10 @@ load("output/rsf_calving_multi_zoi_table.rda")
 # compare models
 tab_models
 # Re-run best model
-form <- tab_models$definition[1]
+# form <- tab_models$definition[1]
+form <- tab_models |> 
+  dplyr::filter(lc == "landcover_cc") |> 
+  (\(x) x$definition[1])()
 best_fit_calving <- glm(form,
                         data = data_ready_calving_rsf_2h, #weights = w_obs,
                         family = binomial(link = "logit"))
@@ -56,7 +58,6 @@ best_fit_autumn <- glm(form,
                         data = data_ready_autumn_rsf_2h, #weights = w_obs,
                         family = binomial(link = "logit"))
 best_fit_autumn$formula
-
 
 # Predictions
 
@@ -242,12 +243,12 @@ rm(map_pred_autumn_operation)
 
 
 #############################
-# plot
+# differences
 #############################
 
-calving <- c("output/map_prediction_calving_before_construction.tif",
-            "output/map_prediction_calving_construction.tif",
-            "output/map_prediction_calving_operation.tif")
+calving <- c("output/spatial_predictions/map_prediction_calving_before_construction.tif",
+            "output/spatial_predictions/map_prediction_calving_construction.tif",
+            "output/spatial_predictions/map_prediction_calving_operation.tif")
 
 pred_calving <- terra::rast(calving)
 
@@ -267,6 +268,17 @@ png(filename="output/prediction_maps_calving.png", width = 30, height = 11, unit
 plot(pred_calving)  
 dev.off()
 
+#############################
+# plot
+#############################
+
+library(tmap)
+
+a <- terra::ifel(pred_calving[[6]] > 0.01, 1, pred_calving[[6]])
+a <- terra::ifel(pred_calving[[6]] < -0.01, -1, a)
+a <- terra::ifel(abs(a) != 1, 0, a)
+tmap::tm_shape(a, raster.downsample = T) +
+  tm_raster()
 
 #------------------------
 

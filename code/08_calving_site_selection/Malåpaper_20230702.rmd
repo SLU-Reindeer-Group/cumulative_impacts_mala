@@ -1,0 +1,4034 @@
+---
+title: "Reindeer calving site selection script"
+output: html_document
+date: "2022-12-09"
+---
+
+Load R packages :
+
+```{r}
+
+# setwd("C:/Users/leds0001/Sveriges lantbruksuniversitet/MINEDEER - Calving site selection/")
+
+pcks<-c("writexl","move","adehabitatHR", "adehabitatLT", "ggplot2","viridis", "recurse", "fields", "tidyverse", "lubridate", "ggridges", "GGally","sf", "terra", "raster","broom", "ggeffects","amt", "RSQLite", "rgdal","sjPlot","ape","spdep", "irg", "stars","glmnet","sp","car")
+
+library(knitr)
+knitr::opts_chunk$set(eval = FALSE, tidy = TRUE, tidy.opts=list(width.cutoff=60))
+
+sapply(pcks, require, char = TRUE)
+```
+
+
+# 1. Calving site selection
+
+## 1.1 Initialization before analysis
+
+
+Load the data set :
+
+```{r}
+data<-read.csv("data/CSV/data_cleaned_calving_RG.csv")
+View(data)
+```
+
+Only the years 2008-2009-2010-2011-2015-2016 were studied, the years 2017 and 2018 were removed from the analysis:
+
+```{r}
+data<-data[-c(which(data$year==2017),which(data$year==2018)),]
+data$year<-as.factor(data$year)
+levels(data$year)
+
+```
+
+All the unnecessary columns were also removed.
+
+```{r}
+data<-data[,1:8]
+```
+
+The dates in the "timestamp" column were converted in another shape to use the "ltraj" function later on.
+
+```{r}
+data$timestamp <- as.POSIXct(data$timestamp,"%Y-%m-%d T%H:%M:%SZ", tz="UTC")
+```
+
+Then the data was transform into animal trajectory using the "ltraj" function
+
+```{r}
+gps.data.ltraj <- as.ltraj(xy = data[, c("x", "y")], date = data$timestamp, 
+                           id = data$id, burst = data$id, 
+                           proj4string = CRS("+init=epsg:3006"))
+length(gps.data.ltraj)
+```
+
+
+
+The column "ID" has to be ordered to use the "move" function to convert the data into a move object.
+
+```{r}
+data <- data[order(data$id),]
+
+```
+
+Conversion into a move object
+
+```{r}
+move.data <- move(x = data$x, y = data$y,
+                  time = data$timestamp,
+                  data = data, animal = data$id, sensor = 'GPS')
+move.data
+
+nrow(move.data@idData)
+move.data@idData %>% 
+  dplyr::mutate(row_number = row_number())
+
+```
+
+Then was created a new empty table that will be filled by the calving period and site coordinates determined in this analysis.
+
+```{r}
+calving_candidates <- data.frame(id = character(),
+                                 x = numeric(), 
+                                 y = numeric(), 
+                                 date1 = POSIXct(), 
+                                 date2 = POSIXct(), 
+                                 year = numeric())
+
+
+
+```
+
+## 1.2 Re-visitation
+
+To determine the calving time and so the calving site, was calculated the re-visitation in a radius of 200 m for all the individuals
+
+So the following code on the "revisitation" part was repeated for each individual changing n from 1 to length(data)
+
+n corresponds to the first individual then to the second...
+
+```{r}
+n<-1
+
+radius <- 200
+```
+
+The move object for the individual n was extracted
+
+```{r}
+move.ind <- move.data[[n]]
+```
+
+### 1.2.1 Re-visitation analysis from recurse package :
+
+```{r}
+revisitation <- getRecursions(move.ind, radius = radius)
+
+lab_dates <- move.ind$timestamp[seq(1, length(move.ind), length.out = 10)]
+
+```
+
+Creation of 2 graphs representing the trajectory of the individual n related to dates(g1) and to time spend in a spot (g2).
+
+```{r}
+g1 <- as(move.ind, 'data.frame') %>% 
+  ggplot(aes(x = x, y = y, color = as.numeric(timestamp))) + 
+  geom_point() +
+  scale_color_viridis(breaks = as.numeric(lab_dates), 
+                      labels = as_date(lab_dates)) +
+  labs(x = '', y = '', color = "Time") +
+  theme(legend.key.height = unit(2.5, "cm"))
+
+g2 <- as(move.ind, 'data.frame') %>% 
+  dplyr::mutate(residencetime = revisitation$residenceTime) %>% 
+  ggplot(aes(x = x, y = y, color = residencetime)) + 
+  geom_point() +
+  scale_colour_viridis() +
+  labs(x = '', y = '', color = "Residence time (h)")
+plot(g1)
+plot(g2)
+
+```
+
+### 1.2.2 Analysis based on adehabitatLT
+
+ltraj object was extracted for individual n
+
+```{r}
+mov.ind <- gps.data.ltraj[c(n)]
+```
+
+Creation of a graph representing the speed of the individual through time.
+
+```{r}
+print(summary(mov.ind)$id)
+plotltr(gps.data.ltraj[c(n)])
+```
+
+Calculate residence time represented in a graph where the highest peak represents the calving.
+
+```{r}
+res1 <- residenceTime(mov.ind, radius = radius, maxt = 1, addinfo = T, units = "hour")
+plot(residenceTime(mov.ind, radius = 200, maxt = 1, units = "hour"))
+
+```
+
+Creation of clusters to determine the calving period
+
+First, the function "lavielle" performs segmentation of a time series
+
+```{r}
+
+segmentation <- adehabitatLT::lavielle(res1, which = "RT.200", Kmax = 20, Lmin = 2)
+
+```
+
+Then, was estimated the number of segments using a graph where k is the number of groups and Jk is the number of positions per group.
+
+```{r}
+chooseseg(segmentation)
+```
+
+The number of cluster define the variable r
+
+```{r}
+r<-7 # the value of r depends on the results above
+```
+
+A new graph was then generated with the limits of the segments given the number of defined segments.
+
+```{r}
+pa <- findpath(segmentation, r)
+```
+
+The segment with the longest residence time so the highest peak is extracted and corresponds to the variable l.
+
+```{r}
+l<-2 #the value of l depends on the results above
+```
+
+The selected segment is transformed into a data frame
+
+```{r}
+df <- ld(pa[c(l)]) 
+```
+
+Calculate the mean position between the beginning and date
+
+```{r}
+x <- mean(df$x)
+y <- mean(df$y)
+
+```
+
+The id, the beginning and the end date were extracted from the data frame df
+
+```{r}
+id <- as.character(df$id[1])
+date1  <- df$date[1]
+date2  <- df$date[nrow(df)]
+
+```
+
+Creation of a new data frame
+
+```{r}
+#df1<-df1[1,]
+df1 <- data.frame(x, y, id, date1, date2, year = lubridate::year(date1))
+```
+
+Calving site displayed in the trajectory graphs
+
+```{r}
+plot(mov.ind)
+points(df1$x, df1$y, col = "purple", pch = 20, cex = 2)
+
+g3 <- g2 + 
+  geom_point(data = df1, aes(x, y), col = "purple")
+g3
+g2
+
+
+```
+
+After analysis, the column notes could be filled
+
+```{r}
+notes<-c("ok")
+```
+
+## 1.3 Editing data
+
+Update the general table
+
+```{r}
+df1<-cbind(df1, notes)
+df1
+
+
+calving_candidates <- rbind(calving_candidates, df1)
+
+```
+
+Save the table outside R :
+
+```{r}
+write.csv(calving_candidates, "results/CSV/calving_period.csv", row.names = T)
+
+```
+
+Start again with n= n+1 then n= n+2 until n= length(data)
+
+"calving_period" was renamed as "calving_period_dates" and imported into data file
+
+# 3. Resource selection function (RSF)
+
+## 3.1 Initialization before analysis
+
+### 3.1.1 Load data
+
+The csv file with the "TRUE" calving sites was loaded and missing data removed
+
+```{r}
+calv<-read.csv("data/CSV/calving_period_dates.csv")
+calv<-na.omit(calv)
+View(calv)
+```
+
+
+#### Define the area of possible calving sites
+
+
+##### Calculation of the maximum distance : How far a reindeer can go ?
+
+
+###### Calculate the minimum convex polygon (MCP)
+ 
+ 
+Load the calving area where the water was removed on QGIS
+
+```{r}
+calvsites<-st_read("data/Area/without_water.shp")%>% 
+  sf::st_transform(crs =CRS("+init=epsg:3006"))
+coordinates(calv) <- c("x", "y")
+```
+
+MCP calculation 
+```{r}
+gps.mcp<- mcp(calv, percent =100)
+plot(calv, pch = 16)
+plot(gps.mcp, col = alpha (1:5, 0.5), add = TRUE)
+
+plot(gps.mcp, col = alpha (1:5, 0.5))
+plot(calvsites,add = TRUE)
+
+hrs <- mcp.area(calv, percent = seq(50, 100, by = 5))
+hrs
+#196413.29	
+#stable home range size
+ 
+```
+
+convert in shp file
+```{r}
+writeOGR(calv, "data/shp/calv.sp", "calving", driver = "ESRI Shapefile")
+writeOGR(gps.mcp, "data/shp/calv.sp", "MCP", driver = "ESRI Shapefile")
+```
+
+
+On QGIS select the calving sites at the border of the MCP layer
+Load those point on R
+
+```{r}
+
+MCP<- read.csv("data/CSV/MCPcorners.csv")
+
+corners<-MCP$id
+MCP.net<-data[data$id == corners,]
+
+
+```
+
+
+Calculate the net square displacement and redefine the ltraj for this new data with few points
+```{r}
+
+gps.data.ltraj2 <- as.ltraj(xy = MCP.net[, c("x", "y")], date = MCP.net$timestamp, 
+                           id = MCP.net$id, burst = MCP.net$id, 
+                           proj4string = CRS("+init=epsg:3006"))
+
+
+
+```
+
+
+Create a new column for the first individual with the net square displacement :
+
+```{r}
+net2<- sqrt(gps.data.ltraj2[[1]]$R2)
+gps.net2.ltraj<- as.data.frame(cbind(gps.data.ltraj2[[1]],net2))
+
+```
+
+Same for the whole data set :
+
+```{r}
+for (n in 2:length(gps.data.ltraj2)) 
+{net2 <- sqrt(gps.data.ltraj2[[n]]$R2)
+  gps.net2.ltraj<- data.frame(rbind(cbind(gps.data.ltraj2[[n]],net2),gps.net2.ltraj))
+
+}
+
+
+
+
+```
+
+On QGIS create a buffer with the mean net square displacement as the diameter
+
+```{r}
+mean( gps.net2.ltraj$net2)/2
+```
+
+On QGIS cut the calving area to obtain the available area. 
+Load this area of possible calving sites and transform it in the right EPSG.
+
+```{r}
+calvsites<-st_read("data/Area/MCPnetsquare.shp")%>% 
+  sf::st_transform(crs =CRS("+init=epsg:3006"))
+plot(calvsites)
+```
+
+
+
+### 3.1.2 Edit Data
+
+Define the different period thanks to a table with yearly calving period details
+
+First load and re-code the file
+
+```{r}
+details_years <- read.csv("data/CSV/details_snow_free_mala_clean.csv", stringsAsFactors = F) %>% 
+  dplyr::as_tibble() %>% 
+  dplyr::mutate(phase = factor(construction) %>% 
+                  forcats::fct_relevel("after", after = Inf) %>% 
+                  forcats::fct_recode("Before construction" = "before",
+                                      "Construction" = "during",
+                                      "Operation" = "after")) %>% 
+  dplyr::select(year, phase)
+details_years$phase
+
+```
+
+Then merge this file with the table corresponding to the calving dates
+
+```{r}
+calv<-read.csv("data/CSV/calving_period_dates.csv")
+calv<-na.omit(calv)
+calv <- calv%>% 
+  dplyr::left_join(details_years, by = "year")
+
+```
+
+Define the right EPSG for the calving positions in the calving dates´ table
+
+```{r}
+calving <- calv %>% 
+  amt::mk_track(.x = x, .y = y, year,phase, id, crs = "epsg:3006")
+plot(calving)
+
+calv$x<-calving$x_
+calv$y<-calving$y_
+```
+
+### 3.1.3 Addition of random calving sites
+
+Creation of random calving sites according to years
+
+```{r}
+calving2008<-calving[calving$t_ == 2008,]
+random2008 <- nrow(calving2008)
+rand2008<- amt::random_points(calvsites, n = random2008*10, type = "random", presence = calving2008)
+plot(rand2008, main= "2008")
+c_rand2008 <-st_as_sf(rand2008,coords = 2:3 )%>% 
+  terra::vect()
+
+
+
+calving2009<-calving[calving$t_ == 2009,]
+random2009 <- nrow(calving2009)
+rand2009<- amt::random_points(calvsites, n = random2009*10, type = "random", presence = calving2009)
+plot(rand2009, main= "2009")
+c_rand2009 <-st_as_sf(rand2009,coords = 2:3)%>% 
+  terra::vect()
+
+calving2010<-calving[calving$t_ == 2010,]
+random2010 <- nrow(calving2010)
+rand2010<- amt::random_points(calvsites, n = random2010*10, type = "random", presence = calving2010)
+plot(rand2010, main= "2010")
+c_rand2010 <-st_as_sf(rand2010,coords = 2:3)%>% 
+  terra::vect()
+
+
+calving2011<-calving[calving$t_ == 2011,]
+random2011 <- nrow(calving2011)
+rand2011<- amt::random_points(calvsites, n = random2011*10, type = "random", presence = calving2011)
+plot(rand2011, main= "2011")
+c_rand2011 <-st_as_sf(rand2011,coords = 2:3)%>% 
+  terra::vect()
+
+
+calving2015<-calving[calving$t_ == 2015,]
+random2015 <- nrow(calving2015)
+rand2015<- amt::random_points(calvsites, n = random2015*10, type = "random", presence = calving2015)
+plot(rand2015, main= "2015")
+c_rand2015 <-st_as_sf(rand2015,coords = 2:3)%>% 
+  terra::vect()
+
+calving2016<-calving[calving$t_ == 2016,]
+random2016 <- nrow(calving2016)
+rand2016<- amt::random_points(calvsites, n = random2016*10, type = "random", presence = calving2016)
+plot(rand2016, main= "2016")
+c_rand2016 <-st_as_sf(rand2016,coords = 2:3)%>% 
+  terra::vect()
+```
+
+Add the year
+
+```{r}
+rand2008$year<-"2008"
+rand2009$year<-"2009"
+rand2010$year<-"2010"
+rand2011$year<-"2011"
+rand2015$year<-"2015"
+rand2016$year<-"2016"
+```
+
+Creation of a data frame with the coordinates of the random points considering the years
+
+```{r}
+rando<-rbind(rand2008,rand2009,rand2010,rand2011,rand2015,rand2016)
+
+plot(rando)
+yr<-c(2008,2009,2010,2011,2015, 2016)
+phs<-c("Before construction","Before construction", "Construction", "Construction", "Operation", "Operation")
+phaset<-data.frame(code = yr,classe = phs)
+View(rando)
+```
+
+
+
+
+The variables were loaded and rasterized
+
+```{r}
+# maps_files <- list.files("data/covariates/rsf_issf_final", pattern = ".tif$", full.names = T)
+maps_files <- list.files("../../maps/", pattern = ".tif$", full.names = T)
+
+# standardize wind turbine variables
+f <- grep(pattern = "wind_turbines_bin", maps_files, value = TRUE)
+maps_w <- terra::rast(f)
+names(maps_w)
+names(maps_w)[c(4,7)] <- gsub(pattern = "influence", replacement = "wind_turbines_bin_zoi", 
+                            x = names(maps)[c(4,7)])
+names(maps_w)[c(14,17,20)] <- gsub(pattern = "turbines nearest ZOI", 
+                                 replacement = "wind_turbines_bin_zoi_nearest_exp_decay",
+                                 x = names(maps)[c(14,17,20)])
+names(maps_w)[10] <- "wind_turbines_bin_zoi_cumulative_exp_decay7500"
+
+# extract
+maps <- terra::rast(grep(pattern = "wind_turbines_bin", maps_files, value = TRUE, invert = TRUE))
+maps <- c(maps, maps_w)
+names(maps)
+# maps_rast <- raster::stack(maps_files)
+
+# keep only maps that we are going to use
+omit <- c("bear", "building", "house_bin", "landcover_smd", "mining_all", "power_lines",
+          "priv_road_bin", "public_road_bin", "railway", "sound", "trails", "urban",
+          "wolf", "wolv")
+
+maps_to_remove <- grep(paste0(omit, collapse = "|"), names(maps))
+maps <- maps[[-maps_to_remove]]
+maps
+names(maps)
+```
+Extraction of those new points
+
+```{r}
+c_rand<-rbind(c_rand2008,c_rand2009,c_rand2010,c_rand2011,c_rand2015,c_rand2016)
+
+rand_back <- terra::extract(maps, c_rand) %>%
+  as.data.frame()
+View(rand_back)
+colnames(rand_back)
+
+
+```
+
+
+Create data with the calving sites and the variables
+
+```{r}
+lc_class <- read.csv("data/CSV/nmd_classes_eng_reclassified.csv", header = F, 
+                     col.names = c("code", "class"), stringsAsFactors = F) %>% 
+  dplyr::arrange(code)
+```
+
+re-classify the land cover into five classes
+
+```{r}
+open<-rbind(lc_class[lc_class$code == 2,], lc_class[lc_class$code == 3,],lc_class[lc_class$code == 41,],lc_class[lc_class$code == 201,],lc_class[lc_class$code == 202,])
+anthropo<-lc_class[lc_class$code == 51,]
+water<-lc_class[lc_class$code == 61,]
+forest<- rbind(lc_class[lc_class$code == 111,], lc_class[lc_class$code == 112,],lc_class[lc_class$code == 114,],lc_class[lc_class$code == 121,])
+clearcut<-lc_class[lc_class$code == 118,]
+open$classb<-"Open areas"
+anthropo$classb<-"Anthropogenic areas"
+water$classb<-"Water"
+forest$classb<-"Forest lands"
+clearcut$classb<-"Clearcuts"
+lc_class<-rbind(open, anthropo, water, forest, clearcut)
+```
+
+Edit data set 
+```{r}
+rando$ID<-1:nrow(rando)
+data_ready_calving_rsf_nam <-merge(rando,rand_back,"ID") %>%
+  dplyr::mutate(landcover_nmd_mod = factor(landcover_nmd_mod, 
+                                               levels = lc_class$code,
+                                               labels = lc_class$class)) %>%
+  dplyr::mutate(phase = factor(year, 
+                               levels = phaset$code,
+                               labels = phaset$class)) |>
+      dplyr::rename(dem = dem_10m, aspect = dem_aspect, slope = dem_slope,
+                    landcover = landcover_nmd_mod,power_lines_dist= pl_dist) %>%
+      dplyr::rename_with(function(x) gsub("_bin_zoi", "", x), grep("bin", names(.))) %>%
+      dplyr::rename_with(function(x) gsub("_exp_decay", "", x), grep("exp_decay", names(.)))
+colnames(data_ready_calving_rsf_nam)
+  
+```
+
+
+
+TPI as category
+
+calculate SD of TPI using random points
+
+```{r}
+
+#############
+
+SD <- apply(rand_back, 2, sd, na.rm = TRUE)
+
+data_ready_calving_rsf_inds<- 
+data_ready_calving_rsf_nam |> 
+  dplyr::mutate(
+    tpi_cat_s150m = case_when(
+      tpi_s150m <= -SD[1] ~ "valley",
+      tpi_s150m > -SD[1] & tpi_s150m <= -SD[1]/2  ~ "lower slope",
+      tpi_s150m > -SD[1]/2 & tpi_s150m <= 0  ~ "flat area",
+      tpi_s150m > 0 & tpi_s150m <= SD[1]/2  ~ "medium slope",
+      tpi_s150m > SD[1]/2 & tpi_s150m <= SD[1]  ~ "upper slope",
+      TRUE ~ "ridge"
+    ),
+    tpi_cat_s250m = case_when(
+      tpi_s250m <= -SD[2] ~ "valley",
+      tpi_s250m > -SD[2] & tpi_s250m <= -SD[2]/2  ~ "lower slope",
+      tpi_s250m > -SD[2]/2 & tpi_s250m <= 0  ~ "flat area",
+      tpi_s250m > 0 & tpi_s250m <= SD[2]/2  ~ "medium slope",
+      tpi_s250m > SD[2]/2 & tpi_s250m <= SD[2]  ~ "upper slope",
+      TRUE ~ "ridge"
+    ),
+    tpi_cat_s510m = case_when(
+      tpi_s510m <= -SD[3] ~ "valley",
+      tpi_s510m > -SD[3] & tpi_s510m <= -SD[3]/2  ~ "lower slope",
+      tpi_s510m > -SD[3]/2 & tpi_s510m <= 0  ~ "flat area",
+      tpi_s510m > 0 & tpi_s510m <= SD[3]/2  ~ "medium slope",
+      tpi_s510m > SD[3]/2 & tpi_s510m <= SD[3]  ~ "upper slope",
+      TRUE ~ "ridge"
+    )
+  )
+
+
+```
+
+```{r}
+dist_cutoff <- 1.5e4
+wfs <- c("jokkmokksliden", "storliden", "ytteberg", "amliden")
+data_ready_calving_rsf_wf <- data_ready_calving_rsf_inds%>% 
+  dplyr::mutate(viewshed_aml15km = ifelse(wind_dist_aml >  dist_cutoff, 0, viewshed_amliden_mala_binary),
+                cos_aspect = cos(aspect),
+                wind_turbines_dist_comb = pmin(wind_dist_jsy, wind_dist_aml),
+                dist_wf_closest = apply(cbind(wind_dist_jokk, wind_dist_stor, wind_dist_ytte, wind_dist_aml), 1, which.min),
+                wf_name = factor(dist_wf_closest, levels = 1:4, labels = wfs))
+
+
+data_ready_calving_rsf_wf$wf_name
+```
+
+Create viewshed variables with 3 categories
+
+```{r}
+
+lc_class
+# in sight open(1): in sight with open wetlands, arable lands, 
+#    other open lands, anthropogenic, water, heath, tundra
+# in sight cover(2): in sight with pine forests, other coniferous, 
+#    deciduous forests, forested wetlands
+# out of sight(0): out of sight
+labs_view <- c("out of sight", "in sight open", "in sight cover")
+data_ready_calving_rsf_landc <- 
+ data_ready_calving_rsf_wf |>
+  dplyr::mutate(viewshed_lc = ifelse(viewshed_jsy15km == 1 & grepl("forest", landcover),
+                                     2, viewshed_jsy15km) |> 
+                  factor(levels = c(0, 1, 2), labels = labs_view))
+
+data_ready_calving_rsf_landc$viewshed_lc
+
+
+colnames(data_ready_calving_rsf_landc )
+
+```
+Data ready for analysis 
+```{r}
+data_ready_calving_rsf <- data_ready_calving_rsf_landc |> 
+  dplyr::filter(landcover != "water") |> 
+  dplyr::filter(!if_any(contains(c("cumulative", "nearest")), is.na)) |> 
+  dplyr::mutate(landcover= droplevels(landcover),
+                viewshed = factor(viewshed_jsy, levels = 0:1, labels = c("out of sight", "in sight")),
+                across(starts_with("sound_model"), ~ if_else(is.na(.x), 0, .x)))
+```
+
+
+
+
+ndvi
+```{r}
+
+
+ndvi_sum_calving_beck <- stars::read_stars(.x = "data/ndvi/ndvi_sum_calving_beck.tif")
+ndvi_sum_calving_elmore <- stars::read_stars(.x = "data/ndvi/ndvi_sum_calving_elmore.tif")
+
+sos_beck <- stars::read_stars(.x = "data/ndvi/sos_beck.tif")
+sos_elmore <- stars::read_stars(.x = "data/ndvi/sos_elmore.tif")
+
+# monthday
+md <- "0501"
+
+# merge ndvi maps
+ndvi_maps <- c(ndvi_sum_calving_beck, ndvi_sum_calving_elmore)
+years_data <- attr(ndvi_maps, "dimensions")$band$values
+ndvi_maps <- stars::st_set_dimensions(ndvi_maps, 3, values = lubridate::ymd(paste0(years_data, md)), names = "time")
+
+# merge start of season maps
+sos_maps <- c(sos_beck[,,,years_data], sos_beck[,,,years_data])
+sos_maps <- stars::st_set_dimensions(sos_maps, 3, values = lubridate::ymd(paste0(years_data, md)), names = "time")
+
+#load("data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
+# data_ready_calving_rsf_2h
+
+# select relevant data for extraction
+dat_annot <- data_ready_calving_rsf |>
+  dplyr::select(ID, x_, y_,case_, year) |> 
+  sf::st_as_sf(coords = c("x_", "y_"), crs = 3006) |>
+  sf::st_transform(crs = 4326) |>
+  dplyr::mutate(t_interp = lubridate::ymd(paste0(year, md)))
+ 
+# stars::st_extract(ndvi_maps, dat_annot, time_column = "t_interp")
+# stars::st_extract(sos_maps, dat_annot, time_column = "t_interp")
+
+# annotate in space and time, get average between methods
+ndvi <- stars::st_extract(ndvi_maps, dat_annot, time_column = "t_interp") |> 
+  dplyr::rename(beck = 1, elmore = 2) |> 
+  sf::st_drop_geometry()
+ndvi$ndvi = rowMeans(ndvi[c("beck", "elmore")])
+sos <- stars::st_extract(sos_maps, dat_annot, time_column = "t_interp") |> 
+  dplyr::rename(beck = 1, elmore = 2) |> 
+  sf::st_drop_geometry()
+sos$sos = rowMeans(sos[c("beck", "elmore")])
+
+data_ready_calving_rsf_2h<- cbind(data_ready_calving_rsf, ndvi["ndvi"], sos["sos"]) |>
+  dplyr::filter(!if_any(contains(c("sos", "ndvi")), is.na)) 
+
+colnames(data_ready_calving_rsf )
+```
+
+## 3.2 RSF process
+
+### 3.2.1 GLM, no threshold regression
+
+Add a weight
+
+```{r}
+data_ready_calving_rsf_2h$w_obs <- ifelse(data_ready_calving_rsf_2h$case_, 1, 5000)
+
+data_ready_calving_rsf_2h$case_ <- ifelse(data_ready_calving_rsf_2h$case_ == TRUE, 1, 0)
+```
+
+Wind turbines distances
+
+```{r}
+summary(data_ready_calving_rsf_2h$wind_turbines_dist_comb)
+
+```
+
+##### GLM
+```{r}
+
+
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(house_dist+1) + log(mining_dist_Krist+1) +
+  wf_name + landcover*phase*log(wind_turbines_dist_comb+1)
+
+fit1 <- glm(update(base_formula, ~ . + tpi_cat_s150m), 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit1$formula
+summary(fit1)
+
+car::vif(fit1)
+```
+
+
+###### Backward deletion
+
+
+```{r}
+base_formula2 <- update(base_formula, ~ . - log(trails_dist + 1))
+fit2 <- glm(update(base_formula2, ~ . + tpi_cat_s150m),
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit2$formula
+summary(fit2)
+car::vif(fit2)
+```
+
+
+```{r}
+base_formula3 <- update(base_formula2, ~ . - scale(sos))
+fit3 <- glm(update(base_formula3, ~ . + tpi_cat_s150m),
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit3$formula
+summary(fit3)
+car::vif(fit3)
+drop1(fit3,test ="Chi")
+```
+
+```{r}
+base_formula4 <- update(base_formula3, ~ . - scale(slope))
+fit4 <- glm(update(base_formula4, ~ . + tpi_cat_s150m),
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit4$formula
+summary(fit4)
+car::vif(fit4)
+drop1(fit4,test ="Chi")
+```
+###### Compare TPI keeping the best model
+```{r}
+
+fit4.2 <- glm(update(base_formula4, ~ . + tpi_cat_s250m), 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit4.3 <- glm(update(base_formula4, ~ . + tpi_cat_s510m), 
+              data = data_ready_calving_rsf_2h, #weights = w_obs,
+              family = binomial(link = "logit"))
+
+# compare
+(AICvals_phase <- bbmle::AICtab(fit4, fit4.2, fit4.3, weights = T, base = T))
+
+```
+
+```{r}
+fit4.2$formula
+summary(fit4.2)
+car::vif(fit4.2)
+drop1(fit4.2,test ="Chi")
+```
+
+
+###### Compare viewshed and landcover
+I don´t really understand this part 
+
+
+```{r}
+
+base_formula5 <- update(base_formula4, ~ . + tpi_cat_s150m -
+                             landcover*phase*log(wind_turbines_dist_comb+1) +
+                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+base_formula5.2 <- update(base_formula4, ~ . + tpi_cat_s250m -
+                             landcover*phase*log(wind_turbines_dist_comb+1) +
+                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+base_formula5.3 <- update(base_formula4, ~ . + tpi_cat_s510m -
+                             landcover*phase*log(wind_turbines_dist_comb+1) +
+                             viewshed_lc*phase*log(wind_turbines_dist_comb+1))
+
+fit5 <- glm(base_formula5,
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+fit5.2 <- glm(base_formula5.2,
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+fit5.3 <- glm(base_formula5.3,
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fit5$formula
+car::vif(fit5)
+summary(fit5)
+
+```
+
+Compare
+```{r}
+(AICvals_phase <- bbmle::AICtab(fit4, fit4.2, fit4.3, 
+                                fit5, fit5.2, fit5.3, weights = T, base = T))
+
+```
+
+```{r}
+drop1(fit5.2,test ="Chi")
+```
+best model
+
+```{r}
+best_fit <- fit5.2
+summary(best_fit)
+```
+
+#########################################################################################
+###### prediction
+```{r}
+cols <- rev(RColorBrewer::brewer.pal(3, "Set1"))
+```
+
+predict mines
+
+```{r}
+base_formula5.3 <- update(base_formula4, ~ . + tpi_cat_s510m -
+                             landcover*phase*log(wind_turbines_dist_comb+1) +
+                             viewshed_lc + phase*log(wind_turbines_dist_comb+1))
+fit5.3 <- glm(base_formula5.3,
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+best_fit <- fit5.3
+
+pr_mining <- ggeffects::ggpredict(best_fit, terms = c("mining_dist_Krist"))
+str(pr_mining, max.level = 2)
+pr_mining$x <- pr_mining$x/1000
+g_mining <- pr_mining %>% 
+  plot(show.title = F, colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to wind turbines (m)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  xlim(0, 10)
+
+pr_mining <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb"))
+str(pr_mining, max.level = 2)
+plot(pr_mining)
+```
+
+
+ wind dist, phase, and land cover, for ytteberg
+
+```{r}
+
+pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
+                          typical = "median", condition = c(wf_name = "ytteberg"))
+
+pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
+g_log_wind <- pr_log_wind_phase %>% 
+plot(show.title = F, colors = cols) +
+geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+labs(x = "Distance to wind turbines (m)",
+      y = "Predicted probability of use",
+      colour = "Phase") +
+xlim(0, 10)
+ggsave(filename = "output/01_traditional_fit/calving_wind_phase_view_ytte.png", 
+plot = g_log_wind, 
+ width = 20, height = 10, units = "cm", dpi = 300)
+```
+##########################################################################################################
+
+##### GLM, no threshold regression, using ZoI for wind power and mining
+
+```{r}
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + 
+  log(house_dist+1) + scale(mining_Krist_nearestXXX) +
+  wf_name + landcover*phase*scale(wind_turbines_ZZZ)
+
+scals <- c(100, 250, 500, 1000,2000, 2500,3000, 5000, 7500, 10000)
+zois <- c("nearest", "cumulative")
+wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
+tpi_scals <- c("tpi_cat_s150m", "tpi_cat_s250m", "tpi_cat_s510m")
+lc_var <- c("landcover", "viewshed_lc")
+
+# n models = 7*2*14*3*2 = 1176
+```
+
+# using land cover
+
+
+```{r}
+fits <- tibble::tibble(mining = numeric(), wind = character(), 
+                       tpi = character(), lc = character(), 
+                       aic = numeric())
+#models <- list()
+counter <- 1
+for(i in scals) {
+  for(j in wind_scals) {
+  for(tt in tpi_scals) {
+  for(lc in lc_var) {
+    updt <- paste0("~ . - scale(mining_Krist_nearestXXX) - ",
+                   "landcover*phase*scale(wind_turbines_ZZZ) + ", 
+                   tt, " + ",
+                   paste0("scale(mining_Krist_nearest", i, ") + "),
+                   paste0(lc, "*phase*scale(wind_turbines_", j, ")"))
+    form <- update(base_formula, updt)
+    
+    print(paste0("mines = ", i, "; wind = ", j, "; tpi = ", tt, 
+                 "; lc = ", lc, " up and running..."))
+    fit1 <- glm(form, 
+                data = data_ready_calving_rsf_2h, #weights = w_obs,
+                family = binomial(link = "logit"))
+    fits[counter,1] <- i
+    fits[counter,2] <- j
+    fits[counter,3] <- tt
+    fits[counter,4] <- lc
+    fits[counter,5] <- AIC(fit1)
+    
+    counter <- counter+1
+  }}}
+}
+
+save(fits, file = "results/calving_multi_zoi_table.rda")
+load("results/calving_multi_zoi_table.rda")
+fits
+fits[which.min(fits$aic),]
+```
+
+Compare models
+```{r}
+(tab_models <- fits |>
+  dplyr::mutate(mining = as.character(mining)) |>
+  dplyr::bind_rows(
+    tibble::tibble(mining = "log", wind = "log", 
+                   tpi = "tpi_cat_s150m",
+                   lc = "viewshed_lc",
+                   aic = AIC(best_fit))) |>
+  dplyr::mutate(dAIC = abs(aic - min(aic))) |>
+  dplyr::arrange(dAIC))
+```
+
+```{r}
+tab_models |>
+  readr::write_csv(file = "results/CSV/rsf_calving_AIC_table_complete.csv")
+```
+```{r}
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + tpi_cat_s250m +
+  log(house_dist+1) + scale(mining_Krist_nearest10000) +
+  wf_name + viewshed_lc*phase*scale(wind_turbines_nearest1000)
+
+fitS1 <- glm(base_formula, 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fitS1$formula
+car::vif(fitS1)
+summary(fitS1)
+```
+```{r}
+base_formula2<-update(base_formula, ~ . - scale(sos))
+fitS2 <- glm(base_formula2, 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fitS2$formula
+car::vif(fitS2)
+summary(fitS2)
+```
+```{r}
+
+base_formula3<-update(base_formula2, ~ . - scale(slope))
+fitS3 <- glm(base_formula3, 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fitS3$formula
+car::vif(fitS3)
+summary(fitS3)
+```
+```{r}
+base_formula4<-update(base_formula3, ~ . - log(trails_dist + 1))
+fitS4 <- glm(base_formula4, 
+            data = data_ready_calving_rsf_2h, #weights = w_obs,
+            family = binomial(link = "logit"))
+
+fitS4$formula
+car::vif(fitS4)
+summary(fitS4)
+```
+```{r}
+best_fitS<-fitS4
+```
+
+
+### 3.2.2 More info, summary, and predictions on the best model
+```{r}
+
+broom::glance(best_fitS)
+broom::tidy(best_fitS)
+
+m1_plot <- broom::tidy(best_fitS) %>% 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0))) %>% 
+  ggplot(aes(x = term, y = estimate, color = significant)) +
+  geom_point(show.legend = F) +
+  # geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+  #                 position = position_dodge(width = 0.7), size = 0.8,
+  #                 show.legend = F) +
+  geom_hline(yintercept = 0, lty = 2) +
+  labs(y = "Relative Selection Strength", x = "") +
+  theme_light() + 
+  coord_flip()
+m1_plot
+ggsave("rsf_calving_coefs_log.png", plot = m1_plot, path = "results/graphs/", 
+       width = 20, height = 20, units = "cm", dpi = 300)
+
+```
+
+```{r}
+model_call <- sapply(attr(AICvals_phase, "row.names"), function(x) paste(as.character(formula(eval(as.symbol(x))))[c(2,1,3)], collapse = " "))
+AICvals_phase %>% 
+  dplyr::as_tibble(rownames = "model") %>%
+  dplyr::mutate(definition = unname(model_call)) %>%
+  readr::write_csv(file = "results/CSV/rsf_calving_AIC_table_log.csv")
+
+summary(best_fit)
+
+
+coefs <- broom::tidy(best_fitS) %>% 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)))
+coefs %>% 
+  mutate_if(is.numeric, round, digits = 3) %>% 
+  readr::write_csv(file = "results/CSV/rsf_calving_AIC_table_log2.csv")
+
+RES<-read.csv("results/CSV/rsf_calving_AIC_table_log2.csv", sep = ",", dec = ".")
+
+```
+
+
+```{r}
+RES[RES$significant ==1,]$term
+```
+
+
+##########################################################################################################
+
+
+```{r}
+model_call <- sapply(attr(AICvals_phase, "row.names"), function(x) paste(as.character(formula(eval(as.symbol(x))))[c(2,1,3)], collapse = " "))
+AICvals_phase %>% 
+  dplyr::as_tibble(rownames = "model") %>%
+  dplyr::mutate(definition = unname(model_call)) %>%
+  readr::write_csv(file = "results/CSV/rsf_calving_AIC_table_log.csv")
+
+summary(best_fit)
+
+
+coefs <- broom::tidy(best_fit) %>% 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)))
+coefs %>% 
+  mutate_if(is.numeric, round, digits = 3) %>% 
+  readr::write_csv(file = "results/CSV/rsf_calving_AIC_table_log.csv")
+
+read.csv("results/CSV/rsf_calving_AIC_table_log.csv", sep = ",", dec = ".")
+
+```
+###### Marginal prob plot
+convert in factor 
+
+```{r}
+pr_mining <- ggpredict(best_fit, terms = "mining_dist_Krist")
+pr_mining$x <- pr_mining$x/1000
+g_mining <- pr_mining %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to mining (km)",
+       y = "Predicted probability of use",
+       color = "Phase") +
+  xlim(0, 20)
+ggsave(filename = "rsf_calving_mining.png", plot = g_mining, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+```
+
+
+Create color palette 
+```{r}
+cols <- rev(RColorBrewer::brewer.pal(3, "Set1"))
+```
+
+averaged over all conditions, only slope
+```{r}
+as.factor(best_fit)
+pr_slp <- ggpredict(best_fit, terms = "slope",
+                   typical = "median") 
+plot(pr_slp, lim = c(0, 1)) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey")
+
+# only wind dist, averaged over all land cover types
+# pr_wind_general <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase"),
+#                             typical = "median")
+# pr_wind_general$x <- pr_wind_general$x/1000
+# g_wind_general <- pr_wind_general %>% 
+#   plot(limits = c(0,1), show.title = F, show.x.title = F, col = cols) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Distance to wind turbines (km)",
+#        y = "Predicted probability of use",
+#        colour = "Phase") +
+#   xlim(0, 10)
+# ggsave(filename = "results/calving_wind_phase_general.png", plot = g_wind_general, 
+#        width = 15, height = 12, units = "cm", dpi = 300)
+
+# wind dist, phase, and land cover, for ytteberg
+pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
+                               typical = "median", condition = c(wf_name = "ytteberg"))
+#, condition = c(landcover_cc = "coniferous forests"))
+pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
+g_log_wind <- pr_log_wind_phase %>% 
+  plot(show.title = F, col = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to wind turbines (m)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  #ylim(0, 1) +
+  xlim(0, 10)
+ggsave(filename = "output/01_traditional_fit/calving_wind_phase_view_ytte.png", plot = g_log_wind, 
+       width = 20, height = 10, units = "cm", dpi = 300)
+
+# wind dist, phase, and land cover, for places closer to each of the WFs
+wfs <- levels(data_ready_calving_rsf_2h$wf_name)
+for(i in wfs) {
+  pr_log_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_dist_comb", "phase", "viewshed_lc"),
+                                 typical = "median", condition = c(wf_name = i))
+  #, condition = c(landcover_cc = "coniferous forests"))
+  pr_log_wind_phase$x <- pr_log_wind_phase$x/1000
+  g_log_wind <- pr_log_wind_phase %>% 
+    plot(show.title = F, limits = c(0,1), colors = cols) +
+    geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+    labs(x = "Distance to wind turbines (km)",
+         y = "Predicted probability of use",
+         colour = "Phase") +
+    xlim(0, 10)
+  ggsave(filename = paste0("output/01_traditional_fit/rsf_calving_wind_phase_view_", i, ".png"), plot = g_log_wind, 
+         width = 20, height = 8, units = "cm", dpi = 300)
+}
+# pr_wind_phase <- ggpredict(fit9_nolog, terms = c("wind_dist", "phase", "landcover"))
+# g_wind <- pr_wind_phase %>% 
+#   plot(show.title = F, show.x.title = F) +
+#   geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "Distance to wind turbines (km)",
+#        y = "Predicted probability of use") +
+#   xlim(0, 10)
+# ggsave(filename = "results/calving_wind_phase_lc_no_log.png", plot = g_wind, 
+#        width = 20, height = 20, units = "cm", dpi = 300)
+
+# mining
+pr_mining <- ggpredict(best_fit, terms = c("mining_Krist_dist"))
+pr_mining$x <- pr_mining$x/1000
+g_mining <- pr_mining %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to mining (km)",
+       y = "Predicted probability of use",
+       color = "Phase") +
+  xlim(0, 20)
+ggsave(filename = "rsf_calving_mining.png", plot = g_mining, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# roads
+pr_public_road <- ggpredict(best_fit, terms = c("public_road_dist"))
+pr_public_road$x <- pr_public_road$x/1000
+g_road <- pr_public_road %>%
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to large roads (km)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  xlim(0, 3)
+ggsave(filename = "rsf_calving_roads.png", plot = g_road,
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# error with NAs
+pr_priv_road <- ggpredict(best_fit, terms = c("priv_road_dist"))
+pr_priv_road$x <- pr_priv_road$x/1000
+g_prov_road <- pr_priv_road %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to small roads (km)",
+       y = "Predicted probability of use",
+       colour = "Phase") +
+  xlim(0, 1)
+ggsave(filename = "rsf_calving_private_roads.png", plot = g_prov_road, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+#tab <- do.call(cbind.data.frame, attr(pr_priv_road, "constant.values"))
+#df <- data.frame(priv_road_dist = pr_priv_road$x*1000, tab)
+#df <- data.frame(priv_road_dist = 1, tab)
+#pred <- predict(best_fit, df, type = "link")
+#exp(log(df$priv_road_dist+1)*-0.037344)
+
+# power lines
+pr_pl <- ggpredict(best_fit, terms = c("power_lines_dist"))
+pr_pl$x <- pr_pl$x/1000
+g_pl <- pr_pl %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to power lines (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 10)
+ggsave(filename = "rsf_calving_pl.png", plot = g_pl, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# trails
+pr_trail <- ggpredict(best_fit, terms = c("trails_dist"))
+pr_trail$x <- pr_trail$x/1000
+g_trail <- pr_trail %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to trails (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 5)
+ggsave(filename = "rsf_calving_trails.png", plot = g_trail,
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# houses
+pr_house <- ggpredict(best_fit, terms = c("house_dist"))
+pr_house$x <- pr_house$x/1000
+g_house <- pr_house %>% 
+  plot(show.title = F, show.x.title = F,
+       limits = c(0,1), colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Distance to houses (km)",
+       y = "Predicted probability of use") +
+  xlim(0, 5)
+ggsave(filename = "rsf_calving_houses.png", plot = g_trail, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# elevation
+pr_elevation <- ggpredict(best_fit, terms = c("dem"))
+g_elevation <- pr_elevation %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Elevation (m)",
+       y = "Predicted probability of use",
+       color = "Phase") + 
+  xlim(0, NA)
+ggsave(filename = "rsf_calving_elevation.png", plot = g_elevation, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+
+# tpi
+pr_tpi <- ggpredict(best_fit, terms = c("tpi_cat_s150m"))
+g_tpi <- pr_tpi %>% 
+  plot(show.title = F, show.x.title = F,
+       #limits = c(0,1), 
+       colors = cols) +
+  geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "Terrain position index category (150m)",
+       y = "Predicted probability of use",
+       color = "Phase") 
+ggsave(filename = "rsf_calving_tpi.png", plot = g_tpi, 
+       path = "output/01_traditional_fit/",
+       width = 15, height = 12, units = "cm", dpi = 300)
+```
+
+
+
+
+
+#######################################This is the part I don´t understand############################################
+# spatial prediction
+
+define thresholds for distance to the nearest wind turbine
+define interactions with phase by hand
+```{r}
+
+w <- log(data_ready_calving_rsf_2h$wind_turbines_dist_comb + 1)
+w1 <- ifelse(w > log(1000), w - log(1000), 0)
+w2 <- ifelse(w > log(2000), w - log(2000), 0)
+w3 <- ifelse(w > log(3000), w - log(3000), 0)
+w4 <- ifelse(w > log(4000), w - log(4000), 0)
+w5 <- ifelse(w > log(5000), w - log(5000), 0)
+w6 <- ifelse(w > log(6000), w - log(6000), 0)
+w7 <- ifelse(w > log(8000), w - log(8000), 0)
+w8 <- ifelse(w > log(10000), w - log(10000), 0)
+w9 <- ifelse(w > log(15000), w - log(15000), 0)
+```
+
+
+define interaction with phase for thresholds for distance to the nearest wind turbine
+```{r}
+p <- data_ready_calving_rsf_2h$phase
+p1 <- ifelse(data_ready_calving_rsf_2h$phase == "Construction", 1, 0)
+p2 <- ifelse(data_ready_calving_rsf_2h$phase == "Operation", 1, 0)
+wp1 <- w*p1
+wp2 <- w*p2
+w1p1 <- w1*p1
+w1p2 <- w1*p2
+w2p1 <- w2*p1
+w2p2 <- w2*p2
+w3p1 <- w3*p1
+w3p2 <- w3*p2
+w4p1 <- w4*p1
+w4p2 <- w4*p2
+w5p1 <- w5*p1
+w5p2 <- w5*p2
+w6p1 <- w6*p1
+w6p2 <- w6*p2
+w7p1 <- w7*p1
+w7p2 <- w7*p2
+w8p1 <- w8*p1
+w8p2 <- w8*p2
+w9p1 <- w9*p1
+w9p2 <- w9*p2
+```
+
+
+# formula
+
+```{r}
+
+formula_calving <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + log(mining_dist_Krist+1) +
+  log(trails_dist+1) + log(house_dist+1) + 
+  landcover*phase*wind_turbines + wf_name
+
+formula_calving <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + log(mining_dist_Krist+1) +
+  log(trails_dist+1) + log(house_dist+1) +
+  landcover + phase + wf_name
+```
+
+
+# model matrix
+
+```{r}
+M <- model.matrix(formula_calving, data = data_ready_calving_rsf_2h)
+dim(M)
+head(M)
+length(w) == nrow(M)
+```
+
+# add variables in the matriX
+
+```{r}
+X <- cbind(M, w, w1, w2, w3, w4, w5, w6, w7, w8, w9,
+           wp1, wp2, w1p1, w1p2, w2p1, w2p2, w3p1, w3p2, w4p1, w4p2,
+           w5p1, w5p2, w6p1, w6p2, w7p1, w7p2, w8p1, w8p2, w9p1, w9p2)
+```
+
+
+# response variable
+```{r}
+y <- data_ready_calving_rsf_2h$case_
+```
+
+# penalty factors for variables
+```{r}
+weights <- c(rep(0, ncol(M)), 0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+             0, 0, rep(log(c(1,2,3,4,5,6,8,10,15)*1000), times = rep(2, 9)))
+
+length(weights) == ncol(X)
+```
+
+# fit
+```{r}
+cv.lasso.w <- try(cv.glmnet(X, y, family = 'binomial', alpha = 1, parallel = TRUE, standardize = FALSE,
+                            type.measure = 'deviance'))
+
+# save object
+save(cv.lasso.w, file = "results/test_fit_cv_lasso_w.rda")
+# load(file = "output/test_fit_cv_lasso_w.rda")
+
+# check coefficients
+coefficients(cv.lasso.w)
+plot(cv.lasso.w)
+coef(cv.lasso.w, s = "lambda.min")
+coef(cv.lasso.w, s = "lambda.1se")
+
+library(broom)
+library(ggplot2)
+broom::glance(cv.lasso.w)
+broom::tidy(cv.lasso.w)
+
+tidied_cv <- tidy(cv.lasso.w)
+glance_cv <- glance(cv.lasso.w)
+
+# ROC
+# rocs <- roc.glmnet(cv.lasso$fit.preval, newy = y)
+
+# save object
+save(cv.lasso.w, file = "results/test_fit_cv_lasso_w.rda")
+```
+
+#-----------
+# # improvement
+# # NOT! added observation weights according to Fieberg et al 2021 - NO!
+# # changed formula specification
+# # add mining distance in a threshold
+
+
+```{r}
+dat <- data_ready_calving_rsf_2h
+
+dat$w <- log(dat$wind_turbines_dist_comb + 1)
+dat$w1 <- ifelse(dat$w > log(1000), dat$w - log(1000), 0)
+dat$w2 <- ifelse(dat$w > log(2000), dat$w - log(2000), 0)
+dat$w3 <- ifelse(dat$w > log(3000), dat$w - log(3000), 0)
+dat$w4 <- ifelse(dat$w > log(4000), dat$w - log(4000), 0)
+dat$w5 <- ifelse(dat$w > log(5000), dat$w - log(5000), 0)
+dat$w6 <- ifelse(dat$w > log(6000), dat$w - log(6000), 0)
+dat$w7 <- ifelse(dat$w > log(8000), dat$w - log(8000), 0)
+dat$w8 <- ifelse(dat$w > log(10000), dat$w - log(10000), 0)
+dat$w9 <- ifelse(dat$w > log(15000), dat$w - log(15000), 0)
+
+dat$m <- log(dat$mining_dist_Krist + 1)
+dat$m1 <- ifelse(dat$m > log(1000), dat$m - log(1000), 0)
+dat$m2 <- ifelse(dat$m > log(2000), dat$m - log(2000), 0)
+dat$m3 <- ifelse(dat$m > log(3000), dat$m - log(3000), 0)
+dat$m4 <- ifelse(dat$m > log(4000), dat$m - log(4000), 0)
+dat$m5 <- ifelse(dat$m > log(5000), dat$m - log(5000), 0)
+dat$m6 <- ifelse(dat$m > log(6000), dat$m - log(6000), 0)
+dat$m7 <- ifelse(dat$m > log(8000), dat$m - log(8000), 0)
+dat$m8 <- ifelse(dat$m > log(10000), dat$m - log(10000), 0)
+dat$m9 <- ifelse(dat$m > log(15000), dat$m - log(15000), 0)
+```
+
+
+
+# formula
+```{r}
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + log(house_dist+1) +
+  landcover + phase + wf_name
+
+formula_calving_w <- update(base_formula, ~ . + w + w1 + w2 + w3 + w4 + w5 + w6 + 
+                              w7 + w8 + w9 +
+                              phase:w + phase:w1 + phase:w2 + phase:w3 + phase:w4 + 
+                              phase:w5 + phase:w6 + phase:w7 + phase:w8 + phase:w9)
+
+formula_calving_wm <- update(formula_calving_w, ~ . + m + m1 + m2 + m3 + m4 + m5 + m6 + m7 + m8 + m9)
+```
+
+
+# model matrix
+```{r}
+base_M <- model.matrix(base_formula, data = dat)
+dim(base_M)
+head(base_M)
+  
+M <- model.matrix(formula_calving_wm, data = dat)
+dim(M)
+head(M)
+length(dat$w) == nrow(M)
+```
+
+# add variables in the matri X
+```{r}
+X <- M
+```
+
+# response variable
+```{r}
+y <- dat$case_
+```
+
+# penalty factors for variables
+```{r}
+penalties <- c(rep(0, ncol(base_M)), #rep(0, length(levels(dat$phase))-1), 
+               0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+               0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+               0, 0, rep(log(c(1,2,3,4,5,6,8,10,15)*1000), times = rep(2, 9)))
+
+length(penalties) == ncol(X)
+```
+
+# fit
+```{r}
+cv.lasso.wm <- try(cv.glmnet(X, y, family = 'binomial', alpha = 1, parallel = TRUE, standardize = FALSE,
+                          type.measure = 'deviance', penalty.factor = penalties))#, weights = dat$w_obs))
+```
+# check coefficients
+```{r}
+coefficients(cv.lasso.wm)
+plot(cv.lasso.wm)
+coef(cv.lasso.wm, s = "lambda.min")
+coef(cv.lasso.wm, s = "lambda.1se")
+```
+# save
+# save(cv.lasso.wm, file = "output/test_fit_cv_lasso_wm.rda")
+# load(file = "output/test_fit_cv_lasso_wm.rda")
+
+#-----------
+# add viewshed and interaction (not landcover)
+
+```{r}
+dat <- data_ready_calving_rsf_2h
+
+dat$w <- log(dat$wind_turbines_dist_comb + 1)
+dat$w1 <- ifelse(dat$w > log(1000), dat$w - log(1000), 0)
+dat$w2 <- ifelse(dat$w > log(2000), dat$w - log(2000), 0)
+dat$w3 <- ifelse(dat$w > log(3000), dat$w - log(3000), 0)
+dat$w4 <- ifelse(dat$w > log(4000), dat$w - log(4000), 0)
+dat$w5 <- ifelse(dat$w > log(5000), dat$w - log(5000), 0)
+dat$w6 <- ifelse(dat$w > log(6000), dat$w - log(6000), 0)
+dat$w7 <- ifelse(dat$w > log(8000), dat$w - log(8000), 0)
+dat$w8 <- ifelse(dat$w > log(10000), dat$w - log(10000), 0)
+dat$w9 <- ifelse(dat$w > log(15000), dat$w - log(15000), 0)
+
+dat$m <- log(dat$mining_dist_Krist + 1)
+dat$m1 <- ifelse(dat$m > log(1000), dat$m - log(1000), 0)
+dat$m2 <- ifelse(dat$m > log(2000), dat$m - log(2000), 0)
+dat$m3 <- ifelse(dat$m > log(3000), dat$m - log(3000), 0)
+dat$m4 <- ifelse(dat$m > log(4000), dat$m - log(4000), 0)
+dat$m5 <- ifelse(dat$m > log(5000), dat$m - log(5000), 0)
+dat$m6 <- ifelse(dat$m > log(6000), dat$m - log(6000), 0)
+dat$m7 <- ifelse(dat$m > log(8000), dat$m - log(8000), 0)
+dat$m8 <- ifelse(dat$m > log(10000), dat$m - log(10000), 0)
+dat$m9 <- ifelse(dat$m > log(15000), dat$m - log(15000), 0)
+```
+
+# formula
+```{r}
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + log(house_dist+1) +
+  wf_name + viewshed_lc + phase
+
+formula_calving_w <- update(base_formula, ~ . + w + w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 +
+                              viewshed_lc*phase*w + viewshed_lc*phase*w1 + viewshed_lc*phase*w2 + 
+                              viewshed_lc*phase*w3 + viewshed_lc*phase*w4 + viewshed_lc*phase*w5 + 
+                              viewshed_lc*phase*w6 + viewshed_lc*phase*w7 + viewshed_lc*phase*w8 + 
+                              viewshed_lc*phase*w9)
+
+formula_calving_wm <- update(formula_calving_w, ~ . + m + m1 + m2 + m3 + m4 + m5 + m6 + m7 + m8 + m9)
+```
+
+
+# model matrix
+```{r}
+base_M <- model.matrix(base_formula, data = dat)
+dim(base_M)
+head(base_M)
+
+M <- model.matrix(formula_calving_wm, data = dat)
+dim(M)
+head(M)
+length(dat$w) == nrow(M)
+```
+
+# add variables in the matri X
+```{r}
+X <- M
+```
+
+# response variable
+y <- dat$case_
+
+# penalty factors for variables
+penalties <- c(rep(0, ncol(base_M)), #rep(0, length(levels(dat$phase))-1), 
+               0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+               0, 0, 
+               0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+               0, 0, 0, 0, 
+               rep(c(0, log(c(1,2,3,4,5,6,8,10,15)*1000)), times = rep(4, 10)),
+               rep(c(0, log(c(1,2,3,4,5,6,8,10,15)*1000)), times = rep(4, 10)))
+
+length(penalties) == ncol(X)
+
+# fit
+cv.lasso.wm.viewshed <- try(cv.glmnet(X, y, family = 'binomial', alpha = 1, parallel = TRUE, standardize = FALSE,
+                                   type.measure = 'deviance', penalty.factor = penalties))#, weights = dat$w_obs))
+
+# save
+save(cv.lasso.wm.viewshed, file = "output/test_fit_cv_lasso_wm_viewshed.rda")
+# load(file = "output/test_fit_cv_lasso_wm_viewshed.rda")
+
+# check coefficients
+coefficients(cv.lasso.wm.viewshed)
+plot(cv.lasso.wm.viewshed)
+coef(cv.lasso.wm.viewshed, s = "lambda.min")
+coef(cv.lasso.wm.viewshed, s = "lambda.1se")
+
+#-----------
+# add interaction with landcover
+formula_calving <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  log(pl_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + log(mining_dist+1) +
+  log(trail_dist+1) + log(house_dist+1) +
+  landcover_cc*phase*w + phase*w1 + phase*w2 + wf_name
+
+M <- model.matrix(formula_calving, data = vindval_data_ready_calving_rsf_2h)
+
+#--------------
+# Model with ZoI nearest
+
+dat <- data_ready_calving_rsf_2h
+
+# wind
+dat$w100 <- dat$wind_turbines_nearest100
+dat$w250 <- dat$wind_turbines_nearest250
+dat$w500 <- dat$wind_turbines_nearest500
+dat$w1000 <- dat$wind_turbines_nearest1000
+dat$w2500 <- dat$wind_turbines_nearest2500
+dat$w5000 <- dat$wind_turbines_nearest5000
+dat$w10000 <- dat$wind_turbines_nearest10000
+
+# mining
+dat$m100 <- dat$mining_Krist_nearest100
+dat$m250 <- dat$mining_Krist_nearest250
+dat$m500 <- dat$mining_Krist_nearest500
+dat$m1000 <- dat$mining_Krist_nearest1000
+dat$m2500 <- dat$mining_Krist_nearest2500
+dat$m5000 <- dat$mining_Krist_nearest5000
+dat$m10000 <- dat$mining_Krist_nearest10000
+
+# formula
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + log(house_dist+1) +
+  wf_name + landcover_cc + phase
+
+formula_calving_w <- update(base_formula, ~ . + w100 + w250 + w500 + w1000 + w2500 + w5000 + w10000 +
+                              phase*w100 + phase*w250 + phase*w500 + 
+                              phase*w1000 + phase*w2500 + phase*w5000 + 
+                              phase*w10000)
+
+formula_calving_wm <- update(formula_calving_w, ~ . + m100 + m250 + m500 + m1000 + m2500 + m5000 + m10000)
+
+# model matrix
+base_M <- model.matrix(base_formula, data = dat)
+dim(base_M)
+head(base_M)
+
+M <- model.matrix(formula_calving_wm, data = dat)
+dim(M)
+head(M)
+length(dat$w100) == nrow(M)
+
+# add variables in the matri X
+X <- M
+# response variable
+y <- dat$case_
+
+# penalty factors for variables
+penalties <- c(rep(0, ncol(base_M)), #rep(0, length(levels(dat$phase))-1), 
+               #c(0,2.5,5,10,25,50,100),
+               #0, 0, 
+               0, log(c(2.5,5,10,25,50,100)*100),
+               #c(0,2.5,5,10,25,50,100),
+               0, log(c(2.5,5,10,25,50,100)*100),
+               #0, 0, 0, 0, 
+               rep(c(0,log(c(2.5,5,10,25,50,100)*100)), times = rep(2, 7)))
+               #rep(c(0, log(c(1,2,3,4,5,6,8,10,15)*1000)), times = rep(4, 10)))
+
+#penalties <- c(rep(0, ncol(base_M)), #rep(0, length(levels(dat$phase))-1), 
+#               c(0, log(c(2.5,5,10,25,50,100)*100)),
+#               c(0, log(c(2.5,5,10,25,50,100)*100)),
+#               rep(c(0, log(c(2.5,5,10,25,50,100)*100)), times = rep(2, 7)))
+
+length(penalties) == ncol(X)
+
+# fit
+cv.lasso.wm.zoi_nearest <- try(cv.glmnet(X, y, family = 'binomial', alpha = 1, parallel = TRUE, standardize = FALSE,
+                                   type.measure = 'deviance', penalty.factor = penalties))#, weights = dat$w_obs))
+
+# save
+save(cv.lasso.wm.zoi_nearest, file = "output/test_fit_cv_lasso_wm_zoi_nearest.rda")
+
+# check coefficients
+(coefs <- coefficients(cv.lasso.wm.zoi_nearest))
+coefs_df <- tibble::tibble(var = coefs@Dimnames[[1]][(coefs@i+1)], beta = coefs@x)
+
+m_base <- glm(formula_calving_wm, family = binomial(link = "logit"), data = dat)
+summary(m_base)
+
+#-------------------
+# Model with ZoI cumulative
+
+dat <- data_ready_calving_rsf_2h
+
+# wind
+dat$w100 <- dat$wind_turbines_cumulative100
+dat$w250 <- dat$wind_turbines_cumulative250
+dat$w500 <- dat$wind_turbines_cumulative500
+dat$w1000 <- dat$wind_turbines_cumulative1000
+dat$w2500 <- dat$wind_turbines_cumulative2500
+dat$w5000 <- dat$wind_turbines_cumulative5000
+dat$w10000 <- dat$wind_turbines_cumulative10000
+
+# mining
+dat$m100 <- dat$mining_Krist_nearest100
+dat$m250 <- dat$mining_Krist_nearest250
+dat$m500 <- dat$mining_Krist_nearest500
+dat$m1000 <- dat$mining_Krist_nearest1000
+dat$m2500 <- dat$mining_Krist_nearest2500
+dat$m5000 <- dat$mining_Krist_nearest5000
+dat$m10000 <- dat$mining_Krist_nearest10000
+
+# formula
+base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  scale(sos) + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + log(house_dist+1) +
+  wf_name + landcover_cc + phase
+
+formula_calving_w <- update(base_formula, ~ . + w100 + w250 + w500 + w1000 + w2500 + w5000 + w10000 +
+                              phase*w100 + phase*w250 + phase*w500 + 
+                              phase*w1000 + phase*w2500 + phase*w5000 + 
+                              phase*w10000)
+
+formula_calving_wm <- update(formula_calving_w, ~ . + m100 + m250 + m500 + m1000 + m2500 + m5000 + m10000)
+
+# model matrix
+base_M <- model.matrix(base_formula, data = dat)
+dim(base_M)
+head(base_M)
+
+M <- model.matrix(formula_calving_wm, data = dat)
+dim(M)
+head(M)
+length(dat$w100) == nrow(M)
+
+# add variables in the matri X
+X <- M
+# response variable
+y <- dat$case_
+
+# penalty factors for variables
+penalties <- c(rep(0, ncol(base_M)), #rep(0, length(levels(dat$phase))-1), 
+               c(0, log(c(2.5,5,10,25,50,100)*100)),
+               #0, 0, 
+               #0, log(c(1,2,3,4,5,6,8,10,15)*1000),
+               c(0, log(c(2.5,5,10,25,50,100)*100)),
+               #0, 0, 0, 0, 
+               rep(c(0, log(c(2.5,5,10,25,50,100)*100)), times = rep(2, 7)))
+               #rep(c(0, log(c(1,2,3,4,5,6,8,10,15)*1000)), times = rep(4, 10)))
+
+length(penalties) == ncol(X)
+
+# fit
+cv.lasso.wm.zoi_cumulative <- try(cv.glmnet(X, y, family = 'binomial', alpha = 1, parallel = TRUE, standardize = FALSE,
+                                   type.measure = 'deviance', penalty.factor = penalties))#, weights = dat$w_obs))
+
+# save
+save(cv.lasso.wm.zoi_cumulative, file = "output/test_fit_cv_lasso_wm_zoi_cumulative.rda")
+
+# check coefficients
+(coefs <- coefficients(cv.lasso.wm.zoi_cumulative))
+coefs_df <- tibble::tibble(var = coefs@Dimnames[[1]][(coefs@i+1)], beta = coefs@x)
+
+m_base <- glm(formula_calving_wm, family = binomial(link = "logit"), data = dat)
+summary(m_base)
+
+
+w1 <- wind_turbines_cumulative100
+w2 <- wind_turbines_cumulative500 #ifelse(w > log(1000), w - log(1000), 0)
+w3 <- wind_turbines_cumulative1000
+w4 <- wind_turbines_cumulative2500
+w5 <- wind_turbines_cumulative5000 #ifelse(w > log(1000), w - log(1000), 0)
+w6 <- wind_turbines_cumulative10000
+
+# 1) Re-run these tests including NDVI
+# 2) Run these models using cumulative and nearest ZOI
+# 2.5) Operationalize the predictions of these models
+# 3) Include interactions land cover or viewshed and interpret
+# 4) Make predictions on maps
+
+```
+
+##########################################Until here #############################################################################
+
+
+# 4 IRG 
+
+## 4.1 Load and edit data 
+
+### 4.1.1 Load data
+
+Load NDVI raster files
+```{r}
+
+r <- list.files("data/IRGcalc", pattern = ".tif$", full.names = T)
+
+```
+
+Load calving sites
+```{r}
+calv<-read.csv("data/CSV/calving_period_dates.csv")
+```
+
+Remove the missing data and unnecessary columns
+```{r}
+calv<-na.omit(calv)
+calv<-calv[,-6]#unnecessary column
+```
+
+#### Reprojection
+
+Reprojection of the TRUE calving sites
+
+```{r}
+calving <- calv %>% 
+  amt::mk_track(.x = x, .y = y,year,id,X,date_begin,crs = "epsg:3006")
+plot(calving)
+
+sites <-st_as_sf(calving,coords = 1:2)%>% 
+  terra::vect()
+plot(sites)
+data<-as.data.frame(sites)
+sites$X<-1:171
+```
+
+Reprojection of the NDVI data if needed
+```{r}
+#for (n in 1:6){s<-terra :: project(rast(r[[n]]), "epsg:3006")
+#writeRaster(s,filename = r[[n]], overwrite = TRUE )}
+
+
+
+```
+#### Extraction of the NDVI at each calving sites during the calving 
+
+##### Create a table with the NDVI of each calving site during calving
+
+For the first calving site
+
+```{r}
+g <- list.files("data/IRGcalc", pattern = ".tif$", full.names = T)
+g <-rast(g)
+
+df1<- extract(g[[as.character(as.Date(sites[sites$X == 1,]$date_begin))]], sites[sites$X == 1,])
+df1<-cbind(sites[sites$X == 1,]$id,df1)
+names(df1)<-c("ID", "...","NDVI")
+ndvi <- df1
+
+```
+
+Loop for all the calving sites
+```{r}
+for (z in 2:171) 
+{df1<- extract(g[[as.character(as.Date(sites[sites$X == z,]$date_begin))]], sites[sites$X == z,])
+df1<-cbind(sites[sites$X == z,]$id,df1)
+names(df1)<-c("ID", "...","NDVI")
+ndvi <- rbind(ndvi, df1)}
+ndvi<-ndvi[,-2]
+NDVItable<-merge(calv, ndvi, by.x ="id", by.y ="ID")
+
+write.csv(NDVItable,"results/NDVI/NDVI.csv",row.names = FALSE )
+```
+
+
+
+
+Extract the NDVI of each days during the calving period
+
+```{r}
+
+r <- list.files("data/IRGcalc", pattern = ".tif$", full.names = T)
+r<-rast(r)
+
+
+NDVI2008<- r[[c(as.character(seq(as.Date("2008-05-01"), as.Date("2008-06-30"), 1)))]]
+NDVI2009<- r[[c(as.character(seq(as.Date("2009-05-01"), as.Date("2009-06-30"), 1)))]]
+NDVI2010<- r[[c(as.character(seq(as.Date("2010-05-01"), as.Date("2010-06-30"), 1)))]]
+NDVI2011<- r[[c(as.character(seq(as.Date("2011-05-01"), as.Date("2011-06-30"), 1)))]]
+NDVI2015<- r[[c(as.character(seq(as.Date("2015-05-01"), as.Date("2015-06-30"), 1)))]]
+NDVI2016<- r[[c(as.character(seq(as.Date("2016-05-01"), as.Date("2016-06-30"), 1)))]]
+
+```
+
+
+Create raster files of NDVI each day during calving season of each year 
+
+
+```{r}
+nam2008<-seq(as.Date("2008-05-01"), as.Date("2008-06-30"), 1)
+for(h in 1:length(nam2008)){s<-terra :: project(NDVI2008[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2008/", nam2008[[h]],".tif"), overwrite = TRUE)}
+
+nam2009<-seq(as.Date("2009-05-01"), as.Date("2009-06-30"), 1)
+for(h in 1:length(nam2009)){s<-terra :: project(NDVI2009[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2009/", nam2009[[h]],".tif"), overwrite = TRUE)}
+
+nam2010<-seq(as.Date("2010-05-01"), as.Date("2010-06-30"), 1)
+for(h in 1:length(nam2010)){s<-terra :: project(NDVI2010[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2010/", nam2010[[h]],".tif"), overwrite = TRUE)}
+
+nam2011<-seq(as.Date("2011-05-01"), as.Date("2011-06-30"), 1)
+for(h in 1:length(nam2011)){s<-terra :: project(NDVI2011[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2011/", nam2011[[h]],".tif"), overwrite = TRUE)}
+
+nam2015<-seq(as.Date("2015-05-01"), as.Date("2015-06-30"), 1)
+for(h in 1:length(nam2015)){s<-terra :: project(NDVI2015[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2015/", nam2015[[h]],".tif"), overwrite = TRUE)}
+
+nam2016<-seq(as.Date("2016-05-01"), as.Date("2016-06-30"), 1)
+for(h in 1:length(nam2016)){s<-terra :: project(NDVI2016[[h]],"epsg:3006")
+writeRaster(s,filename = paste0("results/NDVI/IRG/2016/", nam2016[[h]],".tif"), overwrite = TRUE)}
+
+
+```
+
+
+Load NDVI
+
+```{r}
+NDVI2008<-list.files("results/NDVI/IRG/2008/", pattern = ".tif$", full.names = T)
+NDVI2008<-rast(NDVI2008)
+
+NDVI2009<-list.files("results/NDVI/IRG/2009/", pattern = ".tif$", full.names = T)
+NDVI2009<-rast(NDVI2009)
+
+NDVI2010<-list.files("results/NDVI/IRG/2010/", pattern = ".tif$", full.names = T)
+NDVI2010<-rast(NDVI2010)
+
+NDVI2011<-list.files("results/NDVI/IRG/2011/", pattern = ".tif$", full.names = T)
+NDVI2011<-rast(NDVI2011)
+
+
+NDVI2015<-list.files("results/NDVI/IRG/2015/", pattern = ".tif$", full.names = T)
+NDVI2015<-rast(NDVI2015)
+
+NDVI2016<-list.files("results/NDVI/IRG/2016/", pattern = ".tif$", full.names = T)
+NDVI2016<-rast(NDVI2016)
+
+
+```
+
+
+Create a table for each year with NDVI each day for each calving sites during the calving period
+
+```{r}
+yr<-c(2008,2009,2010,2011,2015, 2016)
+
+df1<- extract(NDVI2008, sites[sites$t_ == 2008,])
+df1<-cbind(sites[sites$t_ == 2008,]$id,df1)
+ndvi08 <- rename(df1, Name = `sites[sites$t_ == 2008, ]$id`)
+write.csv(ndvi08,"results/NDVI/IRG/CSV/NDVI2008.csv",row.names = FALSE )
+
+
+
+df1<- extract(NDVI2009, sites[sites$t_ == 2009,])
+df1<-cbind(sites[sites$t_ == 2009,]$id,df1)
+ndvi09 <- rename(df1, Name = `sites[sites$t_ == 2009, ]$id`)
+write.csv(ndvi09,"results/NDVI/IRG/CSV/NDVI2009.csv",row.names = FALSE )
+
+
+df1<- extract(NDVI2010, sites[sites$t_ == 2010,])
+df1<-cbind(sites[sites$t_ == 2010,]$id,df1)
+ndvi10 <- rename(df1, Name = `sites[sites$t_ == 2010, ]$id`)
+write.csv(ndvi10,"results/NDVI/IRG/CSV/NDVI2010.csv",row.names = FALSE )
+
+
+df1<- extract(NDVI2011, sites[sites$t_ == 2011,])
+df1<-cbind(sites[sites$t_ == 2011,]$id,df1)
+ndvi11 <- rename(df1, Name = `sites[sites$t_ == 2011, ]$id`)
+write.csv(ndvi11,"results/NDVI/IRG/CSV/NDVI2011.csv",row.names = FALSE )
+
+
+df1<- extract(NDVI2015, sites[sites$t_ == 2015,])
+df1<-cbind(sites[sites$t_ == 2015,]$id,df1)
+ndvi15 <- rename(df1, Name = `sites[sites$t_ == 2015, ]$id`)
+write.csv(ndvi15,"results/NDVI/IRG/CSV/NDVI2015.csv",row.names = FALSE )
+
+
+
+df1<- extract(NDVI2016, sites[sites$t_ == 2016,])
+df1<-cbind(sites[sites$t_ == 2016,]$id,df1)
+ndvi16 <- rename(df1, Name = `sites[sites$t_ == 2016, ]$id`)
+write.csv(ndvi16,"results/NDVI/IRG/CSV/NDVI2016.csv",row.names = FALSE )
+
+```
+
+
+
+
+## 4.2 Calculate IRG 
+
+### 4.2.1 In 2008
+ 
+Calculate IRG for each date of the first site :
+
+```{r}
+ndvi08<-read.csv("results/NDVI/IRG/CSV/NDVI2008.csv")%>%
+  relocate(Name, .after = X2008.06.30 )
+ndvi08<-ndvi08[,-1]
+colnames(ndvi08)<-nam2008
+colnames(ndvi08)[62]<- "Name"
+
+s<-sum(ndvi08[1,1+1],- ndvi08[1,1])
+res<-s
+
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+ligne<- for (z in 2:60)
+{s<-sum(ndvi08[1,z+1],-ndvi08[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi08[which.max(res)])
+IRG<-cbind(ndvi08[1,62],maxi)
+greenup<-IRG
+
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+for(n in 2 : length (ndvi08$Name))
+{s<-sum(ndvi08[n,1+1],-ndvi08[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi08[n,z+1],-ndvi08[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi08[which.max(res)])
+IRG<-cbind(ndvi08[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max.IRG")
+
+
+
+IRG2008<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2008,"results/NDVI/IRG/CSV/IRG2008.csv",row.names = FALSE )
+IRG2008<-read.csv("results/NDVI/IRG/CSV/IRG2008.csv")
+
+```
+
+Calculate difference between peak of IRG and calving date for each site
+
+```{r}
+ph<-as.Date(IRG2008$date_begin[1])-as.Date(IRG2008$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2008$Name))
+{ph<-as.Date(IRG2008$date_begin[i])-as.Date(IRG2008$`max.IRG`[i])
+dif<-c(dif, ph)}
+IRG2008$difIRG<-dif
+MOY2008<-mean(IRG2008$difIRG)
+```
+
+### 4.2.2 In 2009
+ 
+Calculate IRG for each date of the first site 
+
+```{r}
+ndvi09<-read.csv("results/NDVI/IRG/CSV/NDVI2009.csv")%>%
+  relocate(Name, .after = X2009.06.30 )
+ndvi09<-ndvi09[,-1]
+colnames(ndvi09)<-nam2009
+colnames(ndvi09)[62]<- "Name"
+  
+s<-sum(ndvi09[1,1+1],-ndvi09[1,1])
+res<-s
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi09[1,z+1],-ndvi09[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi09[which.max(res)])
+IRG<-cbind(ndvi09[1,62],maxi)
+greenup<-IRG
+
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+
+for(n in 2 : length (ndvi09$Name))
+{s<-sum(ndvi09[n,1+1],-ndvi09[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi09[n,z+1],-ndvi09[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi09[which.max(res)])
+IRG<-cbind(ndvi09[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max IRG")
+
+IRG2009<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2009,"results/NDVI/IRG/CSV/IRG2009.csv",row.names = FALSE )
+IRG2009<-read.csv("results/NDVI/IRG/CSV/IRG2009.csv")
+```
+
+Calculate difference between peak of IRG and calving date for each site
+
+```{r}
+ph<-as.Date(IRG2009$date_begin[1])-as.Date(IRG2009$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2009$Name))
+{ph<-as.Date(IRG2009$date_begin[i])-as.Date(IRG2009$`max.IRG`[i])
+  dif<-c(dif, ph)}
+IRG2009$difIRG<-dif
+
+MOY2009<-mean(IRG2009$difIRG)
+
+```
+
+### 4.2.3 In 2010
+ 
+Calculate IRG for each date of the first site 
+
+```{r}
+ndvi10<-read.csv("results/NDVI/IRG/CSV/NDVI2010.csv")%>%
+  relocate(Name, .after = X2010.06.30 )
+ndvi10<-ndvi10[,-1]
+colnames(ndvi10)<-nam2010
+colnames(ndvi10)[62]<- "Name"
+
+s<-sum(ndvi10[1,1+1],-ndvi10[1,1])
+res<-s
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi10[1,z+1],-ndvi10[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi10[which.max(res)])
+IRG<-cbind(ndvi10[1,62],maxi)
+greenup<-IRG
+
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+for(n in 2 : length (ndvi10$Name))
+{s<-sum(ndvi10[n,1+1],-ndvi10[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi10[n,z+1],-ndvi10[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi10[which.max(res)])
+IRG<-cbind(ndvi10[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max IRG")
+
+IRG2010<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2010,"results/NDVI/IRG/CSV/IRG2010.csv",row.names = FALSE )
+IRG2010<-read.csv("results/NDVI/IRG/CSV/IRG2010.csv")
+```
+
+Calculate difference between peak of IRG and calving date for each site
+```{r}
+
+ph<-as.Date(IRG2010$date_begin[1])-as.Date(IRG2010$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2010$Name))
+{ph<-as.Date(IRG2010$date_begin[i])-as.Date(IRG2010$`max.IRG`[i])
+dif<-c(dif, ph)}
+IRG2010$difIRG<-dif
+
+MOY2010<-mean(IRG2010$difIRG)
+
+```
+
+### 4.2.4 In 2011
+ 
+Calculate IRG for each date of the first site 
+```{r}
+ndvi11<-read.csv("results/NDVI/IRG/CSV/NDVI2011.csv")%>%
+  relocate(Name, .after = X2011.06.30 )
+ndvi11<-ndvi11[,-1]
+colnames(ndvi11)<-nam2011
+colnames(ndvi11)[62]<- "Name"
+
+s<-sum(ndvi11[1,1+1],-ndvi11[1,1])
+res<-s
+
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi11[1,z+1],-ndvi11[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi11[which.max(res)])
+IRG<-cbind(ndvi11[1,62],maxi)
+greenup<-IRG
+
+
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+for(n in 2 : length (ndvi11$Name))
+{s<-sum(ndvi11[n,1+1],-ndvi11[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi11[n,z+1],-ndvi11[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi11[which.max(res)])
+IRG<-cbind(ndvi11[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max IRG")
+
+IRG2011<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2011,"results/NDVI/IRG/CSV/IRG2011.csv",row.names = FALSE )
+IRG2011<-read.csv("results/NDVI/IRG/CSV/IRG2011.csv")
+```
+
+Calculate difference between peak of IRG and calving date for each site
+```{r}
+
+ph<-as.Date(IRG2011$date_begin[1])-as.Date(IRG2011$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2011$Name))
+{ph<-as.Date(IRG2011$date_begin[i])-as.Date(IRG2011$`max.IRG`[i])
+dif<-c(dif, ph)}
+IRG2011$difIRG<-dif
+
+MOY2011<-mean(IRG2011$difIRG)
+
+```
+
+
+### 4.2.5 In 2015
+ 
+Calculate IRG for each date of the first site 
+```{r}
+ndvi15<-read.csv("results/NDVI/IRG/CSV/NDVI2015.csv")%>%
+  relocate(Name, .after = X2015.06.30 )
+ndvi15<-ndvi15[,-1]
+colnames(ndvi15)<-nam2015
+colnames(ndvi15)[62]<- "Name"
+
+s<-sum(ndvi15[1,1+1],-ndvi15[1,1])
+res<-s
+
+
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+ligne<- for (z in 2:60)
+{s<-sum(ndvi15[1,z+1],-ndvi15[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi15[which.max(res)])
+IRG<-cbind(ndvi15[1,62],maxi)
+greenup<-IRG
+
+
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+for(n in 2 : length (ndvi15$Name))
+{s<-sum(ndvi15[n,1+1],-ndvi15[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi15[n,z+1],-ndvi15[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi15[which.max(res)])
+IRG<-cbind(ndvi15[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max IRG")
+
+IRG2015<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2015,"results/NDVI/IRG/CSV/IRG2015.csv",row.names = FALSE )
+IRG2015<-read.csv("results/NDVI/IRG/CSV/IRG2015.csv")
+
+```
+
+
+Calculate difference between peak of IRG and calving date for each site
+```{r}
+ph<-as.Date(IRG2015$date_begin[1])-as.Date(IRG2015$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2015$Name))
+{ph<-as.Date(IRG2015$date_begin[i])-as.Date(IRG2015$`max.IRG`[i])
+dif<-c(dif, ph)}
+IRG2015$difIRG<-dif
+
+
+MOY2015<-mean(IRG2015$difIRG)
+```
+
+### 4.2.6 In 2016
+ 
+Calculate IRG for each date of the first site 
+
+```{r}
+ndvi16<-read.csv("results/NDVI/IRG/CSV/NDVI2016.csv")%>%
+  relocate(Name, .after = X2016.06.30 )
+ndvi16<-ndvi16[,-1]
+colnames(ndvi16)<-nam2016
+colnames(ndvi16)[62]<- "Name"
+
+s<-sum(ndvi16[1,1+1],-ndvi16[1,1])
+res<-s
+```
+
+
+
+Extract the maximum IRG corresponding to the peak of greenup 
+
+```{r}
+ligne<- for (z in 2:60)
+{s<-sum(ndvi16[1,z+1],-ndvi16[1,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi16[which.max(res)])
+IRG<-cbind(ndvi16[1,62],maxi)
+greenup<-IRG
+```
+
+Calculate IRG for each date of each other sites and extract the maximum IRG corresponding to the peak of greenup for each sites
+
+```{r}
+for(n in 2 : length (ndvi16$Name))
+{s<-sum(ndvi16[n,1+1],-ndvi16[n,1])
+res<-s
+
+ligne<- for (z in 2:60)
+{s<-sum(ndvi16[n,z+1],-ndvi16[n,z])
+res<-c(res,s)}
+maxi<-colnames(ndvi16[which.max(res)])
+IRG<-cbind(ndvi16[n,62],maxi)
+greenup<-rbind(greenup,IRG)}
+colnames(greenup)<-c("Name", "max IRG")
+
+IRG2016<-merge(greenup,calv[,-c(1,5,6)], by.x = "Name", by.y = "id")
+write.csv(IRG2016,"results/NDVI/IRG/CSV/IRG2016.csv",row.names = FALSE )
+IRG2016<-read.csv("results/NDVI/IRG/CSV/IRG2016.csv")
+
+```
+
+Calculate difference between peak of IRG and calving date 
+
+```{r}
+ph<-as.Date(IRG2016$date_begin[1])-as.Date(IRG2016$`max.IRG`[1])
+dif<-ph
+for(i in 2:length(IRG2016$Name))
+{ph<-as.Date(IRG2016$date_begin[i])-as.Date(IRG2016$`max.IRG`[i])
+dif<-c(dif, ph)}
+IRG2016$difIRG<-dif
+
+MOY2016<-mean(IRG2016$difIRG)
+```
+
+
+## 4.3 IRG analysis
+
+
+### For each phase were calculated :
+
+#### - The minimum and the maximum number of days from greenup (the number of days before greenup the first reindeer calved and the number of days after the greenup the last reindeer calved )
+
+
+```{r}
+
+IRGbefore <- rbind(IRG2008,IRG2009)
+IRGduring <- rbind(IRG2010,IRG2011)
+IRGafter <-rbind(IRG2015,IRG2016)
+
+minbefore<-min(IRGbefore$difIRG)
+maxbefore<-max(IRGbefore$difIRG)
+
+
+minduring<-min(IRGduring$difIRG)
+maxduring<-max(IRGduring$difIRG)
+
+
+minafter<-min(IRGafter$difIRG)
+maxafter<-max(IRGafter$difIRG)
+
+phase<-c("before", "during", "after")
+
+min_per_phase<-c(minbefore, minduring, minafter)
+names(min_per_phase)<-phase
+min_per_phase
+
+```
+
+
+```{r}
+max_per_phase<-c(maxbefore, maxduring, maxafter)
+names(max_per_phase)<-phase
+max_per_phase
+
+```
+
+
+#### - The mean number of days from the peak of IRG 
+```{r}
+
+moy_per_yr<-c(MOY2008,MOY2009,MOY2010,MOY2011,MOY2015,MOY2016)
+names(moy_per_yr)<-c("2008","2009","2010","2011","2015","2016")
+
+IRGbefore<-rbind(IRG2008,IRG2009)
+Moybefore<-mean(IRGbefore$difIRG)
+
+
+IRGduring<-rbind(IRG2010,IRG2011)
+Moyduring<-mean(IRGduring$difIRG)
+
+IRGafter<-rbind(IRG2015,IRG2016)
+Moyafter<-mean(IRGafter$difIRG)
+
+moy_per_phase<-c(Moybefore, Moyduring, Moyafter)
+names(moy_per_phase)<-c("before", "during", "after")
+moy_per_phase
+```
+
+######  The average days from green-up were compared.
+###### Test of the anova hypothesis
+
+Prepare data with phase and number of days from greenup
+
+```{r}
+IRGbefore$phase <- "before"
+IRGafter$phase <- "after"
+IRGduring$phase<- "during"
+
+
+bef<-cbind(IRGbefore$phase,IRGbefore$difIRG)
+aft<-cbind(IRGafter$phase,IRGafter$difIRG)
+dur<-cbind(IRGduring$phase,IRGduring$difIRG)
+table<- rbind(bef,aft,dur)
+colnames(table)<- c("ph","difIRG")
+table<-as.data.frame(table)
+table$difIRG<- as.numeric(table$difIRG)
+table$ph <- as.factor(table$ph)
+
+
+```
+
+- Homoscedasticity
+```{r}
+bartlett.test(table$difIRG~table$ph)
+# homoscedasticity rejected
+# = diff variance
+```
+- Normality (not necessary since homoscedasticity rejected)
+
+```{r}
+bef<-table[table$ph == "before",]$difIRG
+aft <- table[table$ph == "after",]$difIRG
+dur<- table[table$ph == "during",]$difIRG
+
+shapiro.test(bef)#0.27
+shapiro.test(aft)#0.05
+shapiro.test(dur)#0.09
+
+
+hist(bef)
+hist(aft)
+hist(dur)
+#Normality
+
+```
+###### Use the Kruskal-Wallis Test
+
+Hypothesis
+
+- Ordinal response variable
+- Independence
+- Similar shapes
+
+```{r}
+plot(bef)
+plot(aft)
+plot(dur)
+
+```
+
+Test 
+```{r}
+kruskal.test( difIRG ~ ph, data = table)
+#Significant differences between groups
+
+```
+- Pairwise comparison between groups 
+```{r}
+pairwise.wilcox.test(table$difIRG, table$ph,
+                 p.adjust.method = "BH")
+#Significant differences with construction phase
+```
+
+#### - The percentage of calving occurring after the Greenup 
+
+```{r}
+posbefore<-(length(IRGbefore$difIRG[(0<IRGbefore$difIRG)])/length(IRGbefore$difIRG))*100
+posduring<-(length(IRGduring$difIRG[(0<IRGduring$difIRG)])/length(IRGduring$difIRG))*100
+posafter<-(length(IRGafter$difIRG[(0<IRGafter$difIRG)])/length(IRGafter$difIRG))*100
+
+
+calv_after_per_phase<-c(posbefore, posduring,posafter)
+names(calv_after_per_phase)<-phase
+calv_after_per_phase
+```
+
+
+#### - The percentage of calving occurring exactly during the Greenup
+
+```{r}
+
+
+eqbefore<-(length(IRGbefore$difIRG[IRGbefore$difIRG == 0])/length(IRGbefore$difIRG))*100
+eqduring<-(length(IRGduring$difIRG[IRGduring$difIRG == 0])/length(IRGduring$difIRG))*100
+eqafter<-(length(IRGafter$difIRG[IRGafter$difIRG== 0])/length(IRGafter$difIRG))*100
+calv_during_per_phase<-c(eqbefore, eqduring,eqafter)
+names(calv_during_per_phase)<-phase
+calv_during_per_phase
+
+```
+
+#### - The daily rate of green-up before during and after the construction
+
+
+Sort the table
+```{r}
+before<-IRGbefore
+during<-IRGduring
+after<-IRGafter
+
+before$phase <- "Before construction"
+during$phase <- "Construction"
+after$phase<-"Operation"
+
+prop<-rbind(before, during, after)
+
+
+write.csv(prop,"results/CSV/propdates.csv")
+```
+
+change the "max.IRG" in the csv file in a shape that not consider the year
+Then count for each phase the number of calving each date. 
+
+
+```{r}
+propdates<- read.csv("results/CSV/propdates.csv", sep = ",", dec = ".")
+propbef<-propdates[propdates$phase == "Before construction",]
+propbef[order(propbef$max.IRG),]
+
+propdur<-propdates[propdates$phase == "Construction",]
+propdur[order(propdur$max.IRG),]
+
+propaft<-propdates[propdates$phase == "Operation",]
+propaft[order(propaft$max.IRG),]
+
+
+```
+
+Create an excel file (by hand) with the number of peak of greenup per days according to phase
+Open this excel file
+
+
+```{r}
+
+prop<-read.csv("data/CSV/IRGnbperdate.csv", header = TRUE)
+rownames(prop)<-prop[,1]
+```
+
+Calculate the proportion 
+
+```{r}
+prop<-prop[,-1]
+
+prop[1,]<-as.numeric(prop[1,])
+prop[2,]<-as.numeric(prop[2,])
+prop[3,]<-as.numeric(prop[3,])
+sum(prop[1,])
+sum(prop[2,])
+sum(prop[3,])
+
+for (z in 1:length(prop[1,]))
+{prop[1,z]<-(prop[1,z]/sum(prop[1,]))*100}
+
+for (z in 1:length(prop[2,]))
+{prop[2,z]<-(prop[2,z]/sum(prop[2,]))*100}
+
+for (z in 1:length(prop[3,]))
+{prop[3,z]<-(prop[3,z]/sum(prop[3,]))*100}
+
+
+
+```
+
+#### - The daily rate of calving
+
+change the "date_begin" in the csv file in a shape that not consider the year
+Then count for each phase the number of calving each date. 
+
+
+```{r}
+propdates<- read.csv("results/CSV/propdates.csv", sep = ",", dec = ".")
+propbef<-propdates[propdates$phase == "Before construction",]
+propbef[order(propbef$date_begin),]
+
+propdur<-propdates[propdates$phase == "Construction",]
+propdur[order(propdur$date_begin),]
+
+propaft<-propdates[propdates$phase == "Operation",]
+propaft[order(propaft$date_begin),]
+```
+
+
+Create an excel file (by hand) with the number of calving per days according to phase
+Open this excel file
+
+```{r}
+prop<-read.csv("data/CSV/nomberperdays.csv", header = TRUE)
+rownames(prop)<-prop[,1]
+```
+
+Calculate the proportion 
+
+
+```{r}
+prop<-prop[,-1]
+
+prop[1,]<-as.numeric(prop[1,])
+prop[2,]<-as.numeric(prop[2,])
+prop[3,]<-as.numeric(prop[3,])
+sum(prop[1,])
+sum(prop[2,])
+sum(prop[3,])
+
+for (z in 1:length(prop[1,]))
+{prop[1,z]<-(prop[1,z]/sum(prop[1,]))*100}
+
+for (z in 1:length(prop[2,]))
+{prop[2,z]<-(prop[2,z]/sum(prop[2,]))*100}
+
+for (z in 1:length(prop[3,]))
+{prop[3,z]<-(prop[3,z]/sum(prop[3,]))*100}
+
+
+```
+
+### Moreover, the range of time the green-up happened each years was calculated 
+
+```{r}
+max2008<-max(IRG2008$max.IRG)
+min2008<-min(IRG2008$max.IRG)
+minmax2008<- as.Date(max2008)-as.Date(min2008)
+
+max2009<-max(IRG2009$max.IRG)
+min2009<-min(IRG2009$max.IRG)
+minmax2009<-as.Date(max2009)-as.Date(min2009)
+
+max2010<-max(IRG2010$max.IRG)
+min2010<-min(IRG2010$max.IRG)
+minmax2010<-as.Date(max2010)-as.Date(min2010)
+
+max2011<-max(IRG2011$max.IRG)
+min2011<-min(IRG2011$max.IRG)
+minmax2011<-as.Date(max2011)-as.Date(min2011)
+max2015<-max(IRG2015$max.IRG)
+min2015<-min(IRG2015$max.IRG)
+minmax2015<-as.Date(max2015)-as.Date(min2015)
+
+max2016<-max(IRG2016$max.IRG)
+min2016<-min(IRG2016$max.IRG)
+minmax2016<-as.Date(max2016)-as.Date(min2016)
+
+year <- c("2008","2009","2010","2011","2015","2016")
+minmax<-rbind(c(min2008,min2009,min2010,min2011,min2015,min2016),c(max2008,max2009,max2010,max2011,max2015,max2016),c(minmax2008,minmax2009,minmax2010,minmax2011,minmax2015,minmax2016))
+colnames(minmax)<- year
+rownames(minmax)<-c("min green-up date", "max green-up date", "Difference")
+write.csv(minmax,"results/NDVI/IRG/CSV/green-updates.csv",row.names = TRUE)  
+```
+
+
+### Graphs
+
+Create a table with the whole data
+```{r}
+nam<-c("Mean","maximum days before greenup"," maximum days after greenup", "% of calving occuring after greenup", "% of calving occuring during greenup")
+per_phase<-cbind(moy_per_phase,min_per_phase,max_per_phase,calv_after_per_phase, calv_during_per_phase)
+colnames(per_phase)<-nam
+write.csv(per_phase,"results/NDVI/IRG/CSV/Results_per_phase.csv",row.names = TRUE)
+
+```
+
+
+```{r}
+per_phase<-read.csv("results/NDVI/IRG/CSV/Results_per_phase.csv")
+```
+
+
+- The number of days before Greenup the first reindeer calved
+
+```{r}
+barplot(-per_phase$maximum.days.before.greenup, names.arg = per_phase$X,xlab = "Phase", ylab = "Maximum number of days after green-up",col = c("darkgreen","darkblue","darkred"))
+```
+
+- The number of days after Greenup the last reindeer calved
+
+```{r}
+barplot(per_phase$X.maximum.days.after.greenup, names.arg = per_phase$X,xlab = "Phase", ylab = "Maximum number of days after green-up",col = c("darkgreen","darkblue","darkred"))
+```
+
+- The average number of days from greenup
+
+```{r}
+barplot(per_phase$Mean, names.arg = per_phase$X, xlab = "Phase", ylab = "Average number of days from green-up",col = c("darkgreen","darkblue","darkred"))
+
+```
+
+- The percentage of calving occurring after the Greenup 
+
+```{r}
+barplot(per_phase$X..of.calving.occuring.after.greenup, names.arg = per_phase$X,xlab = "Phase", ylab  = "% of calving occuring after green-up", col = c("darkgreen","darkblue","darkred"))
+```
+
+- The percentage of calving occurring before the Greenup 
+
+```{r}
+barplot(per_phase$X..of.calving.occuring.during.greenup, names.arg = per_phase$X,xlab = "Phase", ylab  = "% of calving occuring during green-up", col = c("darkgreen","darkblue","darkred"))
+
+```
+
+-Daily rate of Greenup
+
+```{r}
+
+nam<-seq(as.Date("2008-05-01"), as.Date("2008-06-30"), 1)
+
+matprop<-as.matrix(prop)
+plot(nam,matprop[1,],ylim=c(0,13), type = "o", col="green", lwd=1, xlab="Date", ylab = "Percentage of maximum IRG")
+par(new=TRUE)
+plot(nam,matprop[2,],ylim=c(0,13), axes =F, type = "o", col="blue", lwd=1, xlab="Date", ylab = " ")
+par(new=TRUE)
+plot(nam,matprop[3,],ylim=c(0,13), axes =FALSE, type = "o", col="red", lwd=1, xlab="Date", ylab = " ")
+legend("topright",                    # Add legend to plot
+       legend = c("Before construction", "Construction","Operation"),
+       col = c("green", "blue","red"),
+       pch = 15)
+
+```
+
+- Daily rate of calving
+
+```{r}
+nam<-seq(as.Date("2008-05-01"), as.Date("2008-06-30"), 1)
+
+matprop<-as.matrix(prop)
+plot(nam,matprop[1,],ylim=c(0,12), type = "o", col="green", lwd=1, xlab="Date", ylab = "Percentage of calving")
+par(new=TRUE)
+plot(nam,matprop[2,],ylim=c(0,12), axes =FALSE, type = "o", col="blue", lwd=1, xlab="Date", ylab = " ")
+par(new=TRUE)
+plot(nam,matprop[3,],ylim=c(0,12), axes =FALSE, type = "o", col="red", lwd=1, xlab="Date", ylab = " ")
+legend("topright",                    # Add legend to plot
+       legend = c("Before construction", "Construction","Operation"),
+       col = c("green", "blue","red"),
+       pch = 15)
+```
+
+
+
+Render an output file:
+
+```{r}
+rmarkdown::render("Malåpaper.Rmd", output_format = "html_document",output_file = "Calving_site_selection_script.html",output_dir = "html")
+```
+
+
+
+##################################################################################################
+### 3.1.4 Edit Data file
+
+
+
+The variables were loaded and rasterized
+
+```{r}
+maps_files <- list.files("data/covariates/Factors", pattern = ".tif$", full.names = T)
+
+maps<- terra::rast(maps_files)
+
+maps_rast <- raster::stack(maps_files)
+
+```
+
+
+Load explanation of the class codes
+
+```{r}
+lc_class <- read.csv("data/CSV/nmd_classes_eng_reclassified.csv", header = F, 
+                     col.names = c("code", "class"), stringsAsFactors = F) %>% 
+  dplyr::arrange(code)
+```
+
+re-classify the land cover into five classes
+
+```{r}
+open<-rbind(lc_class[lc_class$code == 2,], lc_class[lc_class$code == 3,],lc_class[lc_class$code == 41,],lc_class[lc_class$code == 201,],lc_class[lc_class$code == 202,])
+anthropo<-lc_class[lc_class$code == 51,]
+water<-lc_class[lc_class$code == 61,]
+forest<- rbind(lc_class[lc_class$code == 111,], lc_class[lc_class$code == 112,],lc_class[lc_class$code == 114,],lc_class[lc_class$code == 121,])
+clearcut<-lc_class[lc_class$code == 118,]
+open$classb<-"Open areas"
+anthropo$classb<-"Anthropogenic areas"
+water$classb<-"Water"
+forest$classb<-"Forest lands"
+clearcut$classb<-"Clearcuts"
+lc_class<-rbind(open, anthropo, water, forest, clearcut)
+```
+
+Extraction of those new points from the map
+
+```{r}
+c_rand<-rbind(c_rand2008,c_rand2009,c_rand2010,c_rand2011,c_rand2015,c_rand2016)
+
+rand_back <- terra::extract(maps, c_rand) %>%
+  as.data.frame()
+View(rand_back)
+
+```
+
+
+Creation of a data frame with the values of the variables tested for each random points and "TRUE" ones
+
+```{r}
+
+Data.RSF<-cbind(rando,rand_back)%>% 
+  dplyr::mutate(landcover = factor(landcover_nmd_mod, 
+                                   levels = lc_class$code,
+                                   labels = lc_class$classb))%>%
+  dplyr::mutate(landcover_nmd_mod = factor(landcover_nmd_mod, 
+                                           levels = lc_class$code,
+                                           labels = lc_class$class))%>%
+  dplyr::mutate(phase = factor(year, 
+                               levels = phaset$code,
+                               labels = phaset$class))%>%
+  relocate(ID, .before = case_)%>%
+  relocate(case_, .before = year)%>%
+  relocate(phase, .after = year)%>%
+  relocate(landcover_nmd_mod, .after = landcover)%>%
+  rename(Used = case_, x=x_, y=y_, elevation = dem_10m, landcover_nmd = landcover_nmd_mod, mine = mining_dist, powerline = pl_dist, private_road = priv_road_dist, public_road = public_road_dist, windfarm = wind_dist, turbines_density1000 = influence_cumulative_exp_decay1000, turbines_density2000 = influence_cumulative_exp_decay2000, turbines_density3000 = influence_cumulative_exp_decay3000,  turbines_density5000 = influence_cumulative_exp_decay5000, turbines_density7500 = wind_turbines_rast_bin_50_zoi_cumulative_bartlett7500_interp10, turbines_nearest1000 = "turbines nearest ZOI1000",turbines_nearest2000 = "turbines nearest ZOI2000",turbines_nearest3000 = "turbines nearest ZOI3000",turbines_nearest5000 = "turbines nearest ZOI5000",turbines_nearest7500 = "turbines nearest ZOI7500",mines_nearest1000 = "mines nearest ZOI1000",mines_nearest2000 = "mines nearest ZOI2000",mines_nearest3000 = "mines nearest ZOI3000",mines_nearest5000 = "mines nearest ZOI5000",mines_nearest7500 = "mines nearest ZOI7500")%>%
+relocate(turbines_density7500, .after = turbines_density5000)
+
+
+
+```
+
+### 3.1.5 Calculation of the mean NDVI
+
+
+Define the right EPSG for the available calving positions just defined
+
+
+```{r}
+Data.RSF$year<-as.numeric(Data.RSF$year)
+calvin <- Data.RSF%>% 
+  amt::mk_track(.x = x, .y = y,year,ID,crs = "epsg:3006")
+plot(calvin)
+
+Data.RSF$x<-calvin$x_
+Data.RSF$y<-calvin$y_
+
+sites <-st_as_sf(calvin,coords = 1:2)%>% 
+  terra::vect()
+plot(sites)
+
+```
+
+
+Creation of two columns in "Data.RSF" with the different NDVI calculations´ methods (Elmore and Beck)
+
+```{r}
+
+elmore<-list.files("data/covariates/NDVI/elmore", pattern = ".tif$", full.names = T)
+elmore<-rast(elmore)
+
+
+df1<- extract(elmore[[1]], sites[sites$t_ == yr[[1]]])
+df1<-cbind(sites[sites$t_ == yr[[1]]]$ID,yr[[1]],df1)
+names(df1)<-c("ID","year","X","elmore")
+elmoresum <- df1
+
+
+for (z in 2:6) 
+{df1<- extract(elmore[[z]], sites[sites$t_ == yr[[z]]])
+df1<-cbind(sites[sites$t_ == yr[[z]]]$ID,yr[[z]],df1)
+names(df1)<-c("ID","year","X","elmore")
+elmoresum <- rbind(elmoresum, df1)}
+elmoresum<-elmoresum[,-3]
+
+
+beck<-list.files("data/covariates/NDVI/beck", pattern = ".tif$", full.names = T)
+beck<-rast(beck)
+
+df1<- extract(beck[[1]], sites[sites$t_ == yr[[1]]])
+df1<-cbind(sites[sites$t_ == yr[[1]]]$ID,yr[[1]],df1)
+names(df1)<-c("ID","year","X","beck")
+becksum <- df1
+
+for (z in 2:6) 
+{df1<- extract(beck[[z]], sites[sites$t_ == yr[[z]]])
+df1<-cbind(sites[sites$t_ == yr[[z]]]$ID,yr[[z]],df1)
+names(df1)<-c("ID","year","X","beck")
+becksum <- rbind(becksum, df1)}
+becksum<-becksum[,-3]
+
+summy<-merge(elmoresum,becksum, by = c("ID","year"))
+summy<-as.data.frame(summy)
+
+
+```
+
+Creation of the column with the average of the two calculations´ methods (Elmore and Beck) which corresponds to the NDVI of the analysis
+
+```{r}
+
+df1<-mean(c(summy$elmore[[1]],summy$beck[[1]]))
+df1<-cbind(summy[1,],df1)
+names(df1)<-c("ID","year","elmore", "beck","mean")
+moy<-df1
+
+for (z in 2:1881){df1<-mean(c(summy$elmore[[z]],summy$beck[[z]]))
+df1<-cbind(summy[z,],df1)
+names(df1)<-c("ID","year","elmore", "beck","mean")
+moy<-rbind(moy,df1)}
+
+rand_background<-merge(Data.RSF, moy, by= c("ID","year"))
+
+Data.RSF<-rand_background%>% 
+  rename(NDVI = mean)%>%
+  relocate(elevation, .after = phase)
+
+write.csv(Data.RSF, "results/CSV/DataRSF.csv", row.names= FALSE)
+
+```
+
+## 3.2 RSF process
+
+### 3.2.1 Preparation of the data
+
+```{r}
+Data.RSF<-read.csv("results/CSV/DataRSF.csv", sep = ",", dec= ".")
+
+```
+
+
+```{r}
+
+Data.rsf.full<- Data.RSF 
+
+Data.rsf.full<-na.omit(Data.rsf.full)
+nrow(Data.rsf.full)
+View(Data.rsf.full)
+```
+
+Categorical variables were converted into factors:
+
+```{r}
+Data.rsf.full$year<-as.factor(Data.rsf.full$year)
+
+```
+
+Calculation of the square elevation ( because it is a continue variable) and log distances (because the infrastructure is supposed to have a stronger influence when it is closer to the site)
+
+```{r}
+Data.rsf.full$logPublic_road<-log(Data.rsf.full$public_road+1)
+Data.rsf.full$logPrivate_road<-log(Data.rsf.full$private_road+1)
+Data.rsf.full$logwindfarm<- log(Data.rsf.full$windfarm+1)
+Data.rsf.full$logmine<-log(Data.rsf.full$mine+1)
+Data.rsf.full$logpowerline<-log(Data.rsf.full$powerline+1)
+Data.rsf.full$elevation2<-Data.rsf.full$elevation^2
+
+```
+
+Add a stronger weight to the FALSE calving sites
+```{r}
+Data.rsf.full$w <- ifelse(Data.rsf.full$Used== TRUE, 1, 5000)
+Data.rsf.full<-relocate (Data.rsf.full, w, .after = Used)
+```
+
+### 3.2.1 Influence of the closest wind farm
+
+Selection of the column needed in the analysis
+
+```{r}
+colnames(Data.rsf.full)
+Data.rsf<- Data.rsf.full[,c(1:8,29,33:39)]
+```
+
+Calculation of the dependence among the different variables
+
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "logwindfarm"))
+#no dependence 
+```
+
+Selection of the best model
+
+```{r}
+
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + logwindfarm * phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3957
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + landcover + logwindfarm*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3956.5
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + logwindfarm + landcover, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3949 
+
+
+RSF.fit4<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI) +logwindfarm, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit4)#AIC = 3974worst
+
+RSF.fit5 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + logwindfarm*phase + landcover, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit5)#3956.5
+
+RSF.fit6 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + logwindfarm*phase + scale(NDVI), family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit6)#3980
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#keep RSF.fit3
+drop1(RSF.fit4, test ="Chi")
+drop1(RSF.fit5, test ="Chi")
+drop1(RSF.fit6, test ="Chi")
+```
+
+Verification of the other assumptions:
+
+-   Homoscedasticity
+
+```{r}
+
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)#To verify homogeneity 
+
+#p_value > 0.05 =  Homoscedasticity not rejected
+
+
+```
+
+-   Normalization
+
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:16),pl)
+#Normalized
+
+dev.off()
+```
+
+### 3.2.2 ZOI of the cumulated wind turbines
+
+#### ZOI = 1000
+
+Selection of the column needed in the analysis
+```{r}
+colnames(Data.rsf.full)
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,18),33:35,37:39)]
+```
+
+Calculation of dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_density1000"))
+#no dependence 
+
+
+```
+
+Calculation of the full model 
+
+```{r}
+#calculate full model :
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_density1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3971.8
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_density1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3969.8
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_density1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3968.4
+
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#Keep RSF.fit3
+
+
+ZOI1000<-RSF.fit3
+
+
+```
+
+Verify other assumptions :
+
+
+-   Homoscedasticity
+ 
+```{r}
+
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+
+```
+
+- Normalization
+
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:16),pl)
+dev.off()
+```
+
+
+
+#### ZOI = 2000
+
+Selection of the column needed 
+
+```{r}
+colnames(Data.rsf.full)
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,19),33:35,37:39)]
+```
+
+Calculation of dependence 
+
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_density2000"))
+```
+
+Calculation of the  full model
+
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_density2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3963.8#BETTER COMPARED TO ZOI = 1
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_density2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3962
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_density2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3960.7
+
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+ZOI2000<-RSF.fit3
+
+```
+
+Verification of other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+
+```
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 3000
+
+Selection of the column needed 
+```{r}
+colnames(Data.rsf.full)
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,20),33:35,37:39)]
+```
+
+Calculate dependence
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_density3000"))
+```
+
+Calculate full model
+
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_density3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3966.6
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_density3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3964.8
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_density3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3963.5
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+ZOI3000<-RSF.fit3#AIC 3963.5
+```
+
+Verify other assumptions
+
+- Homoscedasticity 
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 5000
+
+Selection of the covariates
+```{r}
+colnames(Data.rsf.full)
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,21),33:35,37:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_density5000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_density5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3965.3
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_density5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3963.9
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_density5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3962.6
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+ZOI5000<-RSF.fit3#AIC 3962.6
+```
+
+Verify other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)#To verify homogeneity 
+#p_value > 0.05 = homoscedacité  non rejeté 
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 7 500
+
+Covariates selection 
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,22),33:35,37:39)]
+```
+
+Calculate dependence
+
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_density7500"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_density7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3973.9
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_density7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3972
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_density7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3970.7
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")
+#KEEP rsf.fit3
+
+
+ZOI7500<-RSF.fit3
+```
+
+Verify other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)#To verify homogeneity 
+```
+
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+
+dev.off()
+
+```
+
+
+### 3.2.2 ZOI of the  wind turbines independently
+
+#### ZOI = 1000 
+
+Selection of the covariates 
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,23),33:35,37:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_nearest1000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3965.6
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3963.7
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3962.3
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+turb1000<-RSF.fit3
+```
+
+Verify other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+
+```
+
+#### ZOI = 2000
+
+Covariates selection 
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,24),33:35,37:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_nearest2000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3966.2
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3964.4
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3963
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+turb2000<-RSF.fit3
+```
+
+Verify other assumptions 
+
+-Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+- Normalization 
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 3000
+
+Covariates selection 
+
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,25),33:35,37:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_nearest3000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3966.7
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3965
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3963.7
+
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+turb3000<-RSF.fit3
+```
+
+
+Verify other assumption
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 5000
+
+Selection of the covariates
+
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,26),33:35,37:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_nearest5000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3968
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3966.4
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3965
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+turb5000<-RSF.fit3
+```
+
+Verify other assumptions
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+length( Data.rsf$Used)
+```
+
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 7500
+Selection of the covariates 
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,27),33:35,37:39)]
+```
+
+Calculate dependence
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logmine", "landcover", "phase", "logpowerline", "NDVI", "turbines_nearest7500"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + logpowerline + scale(NDVI)+ landcover + turbines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3970.2
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + scale(NDVI)+ landcover + turbines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3968.5
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logmine + landcover + turbines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3967.2
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+turb7500<-RSF.fit3
+```
+
+Verify other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+
+### 3.2.3 ZOI of the  mine
+
+
+#### ZOI = 1000
+
+Covariate selection 
+
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,09),33:36,38:39)]
+```
+
+Calculate dependence 
+
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logwindfarm", "landcover", "phase", "logpowerline", "NDVI", "mines_nearest1000"))
+```
+
+Calculate full model
+
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + scale(NDVI)+ landcover + mines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3964.9
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + scale(NDVI)+ landcover + mines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3963.3
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm+ landcover + mines_nearest1000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3963.6
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+min1000<-RSF.fit3
+```
+
+Verify other assumption 
+
+- Homoscedasticity 
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+
+```
+
+#### ZOI = 2000
+
+Selection of the covariates
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,10),33:36,38:39)]
+```
+
+Calculate dependence
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logwindfarm", "landcover", "phase", "logpowerline", "NDVI", "mines_nearest2000"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + scale(NDVI)+ landcover + mines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3953.9
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + scale(NDVI)+ landcover + mines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3952.8
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm+ landcover + mines_nearest2000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3952.6
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+min2000<-RSF.fit3
+```
+
+Verify other assumptions
+
+-Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI = 3000
+
+Selection of the covariates
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,11),33:36,38:39)]
+
+```
+
+Calculate dependence 
+
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logwindfarm", "landcover", "phase", "logpowerline", "NDVI", "mines_nearest3000"))
+```
+
+Calculate full model :
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + scale(NDVI)+ landcover + mines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3952.7
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + scale(NDVI)+ landcover + mines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3951.9
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm+ landcover + mines_nearest3000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3951.5
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit2
+
+
+min3000<-RSF.fit3
+```
+
+Verify other assumption
+
+-Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+- Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+#### ZOI =5000
+
+Selection of the covariates 
+
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,12),33:36,38:39)]
+```
+
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logwindfarm", "landcover", "phase", "logpowerline", "NDVI", "mines_nearest5000"))
+
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + scale(NDVI)+ landcover + mines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3949.1
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + scale(NDVI)+ landcover + mines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3948.7
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm+ landcover + mines_nearest5000*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3948
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+min5000<-RSF.fit3
+```
+
+Verify other assumptions
+
+- Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+dev.off()
+```
+
+
+#### ZOI = 7 500
+
+Covariates selection 
+```{r}
+Data.rsf<- Data.rsf.full[,c(1:8,c(29,13),33:36,38:39)]
+```
+
+Calculate dependence 
+```{r}
+ggpairs(Data.rsf, columns = c("elevation", "logPublic_road", "elevation2", "logPrivate_road", "logwindfarm", "landcover", "phase", "logpowerline", "NDVI", "mines_nearest7500"))
+```
+
+Calculate full model
+```{r}
+RSF.fit <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + scale(NDVI)+ landcover + mines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit)#AIC = 3943
+
+RSF.fit2 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm + logpowerline + landcover + mines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit2)#AIC = 3942.4
+
+RSF.fit3 <-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + logwindfarm+ landcover + mines_nearest7500*phase, family = "binomial", data = Data.rsf, weights = w)
+summary(RSF.fit3)#AIC = 3942.6
+
+drop1(RSF.fit, test ="Chi")
+drop1(RSF.fit2, test ="Chi")
+drop1(RSF.fit3, test ="Chi")#KEEP rsf.fit3
+
+
+min7500<-RSF.fit3
+```
+
+Verify other assumptions
+
+-Homoscedasticity
+```{r}
+bartlett.test(resid(RSF.fit3), Data.rsf$Used)
+```
+
+-Normalization
+```{r}
+par(mfrow=(c(2,2)))
+pl<-function(n)
+{plot(Data.rsf[,n],resid(RSF.fit3), xlab = colnames(Data.rsf[n]), ylab = "Residuals")}
+sapply(c(8,10:15),pl)
+
+dev.off()
+```
+
+
+# 4 Results analysis 
+
+## 4.1 Choice of the best model in each cathegory
+
+
+```{r}
+summary(ZOI1000)#3968.4
+summary(ZOI2000)#3960.7
+summary(ZOI3000)#3963.5
+summary(ZOI5000)#3962.6
+summary(ZOI7500)#3970.7
+
+
+drop1(ZOI2000, test ="Chi")
+drop1(ZOI3000, test ="Chi")
+
+#ZOI2000 best model
+
+
+summary(turb1000)#3962.3 
+summary(turb2000)#3963
+summary(turb3000)#3963.7
+summary(turb5000)#3965
+summary(turb7500)#3967.2
+
+
+drop1(turb1000, test ="Chi")#the nearest turbines influence with a zoi of 1km
+
+#Best model turb 1000
+
+summary(min1000)#3963.6 #with or without NDVI
+summary(min2000)#3952.6
+summary(min3000)#3951.5
+summary(min5000)#3948
+summary(min7500)#3942.6 #with or without NDVI
+
+drop1(min7500, test = "Chi")#the nearest mines influence with a zoi of 7.5 km (at least)
+
+
+#AIC with ZOI 7500 very low
+
+#The mines influence on a larger area than the wind farms 
+
+```
+
+To determine the factors influencing the calving site location, were tested in the last model the zone of influence of the turbines and the zone of influence of the mine using the ZOI of the three best models from the mine and the turbine in turn.
+
+```{r}
+
+RSF.Best1<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover+ turbines_density2000*phase+mines_nearest7500, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best2<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density2000*phase+mines_nearest5000, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best3<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density2000*phase+mines_nearest3000, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best4<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density5000*phase+mines_nearest7500, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best5<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density5000*phase+mines_nearest5000, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best6<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density5000*phase+mines_nearest3000, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best7<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density1000*phase+mines_nearest7500, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best8<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density1000*phase+mines_nearest5000, family = "binomial", data = Data.rsf.full, weights = w)
+RSF.Best9<-  glm(Used~TRUE+scale(elevation) + scale(elevation2) + logPublic_road + logPrivate_road + landcover + turbines_density1000*phase+mines_nearest3000, family = "binomial", data = Data.rsf.full, weights = w)
+
+summary(RSF.Best1)#3944
+drop1(RSF.Best1,test ="Chi")#best model density 2000 and mine 7500
+summary(RSF.Best2)#3952
+drop1(RSF.Best2,test ="Chi")
+summary(RSF.Best3)#3959
+drop1(RSF.Best1,test ="Chi")
+summary(RSF.Best4)#3945
+drop1(RSF.Best4,test ="Chi")
+summary(RSF.Best5)
+drop1(RSF.Best5,test ="Chi")
+summary(RSF.Best6)#3953
+drop1(RSF.Best6,test ="Chi")
+summary(RSF.Best7)#3952.7
+drop1(RSF.Best7,test ="Chi")
+summary(RSF.Best8)#3961
+drop1(RSF.Best8,test ="Chi")
+summary(RSF.Best9)#3968.5
+drop1(RSF.Best9,test ="Chi")
+
+
+```
+
+

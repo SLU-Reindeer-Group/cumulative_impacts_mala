@@ -1,0 +1,539 @@
+---
+title: "Appendix B. Cumulative impacts of mining and wind power development on reindeer: selection for grazing areas at regional scale (2nd order habitat selection)"
+author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
+format: 
+  html:
+    self-contained: true
+    toc: true
+    toc-depth: 4 # default is 3
+    toc-title: Contents
+    toc-location: left
+    number-sections: true
+editor: source
+bibliography: references.bib
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(readr)
+library(dplyr)
+library("DT") # Interactive HTML tables
+library(terra)
+library(sf)
+library(tmap)
+```
+
+Here we describe the the data and the results of the regional (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We describe:
+
+-   the characteristics of the study area;
+-   the reindeer GPS data used for the analyses;
+-   the results of the habitat selection models.
+
+# Goals of the analysis
+
+Before start the descriptions, it is worth reminding the question underlying these analyses. The main question driving the analyses is: how is the selection of grazing sites by reindeer across seasons affected by wind power, mining, and other human infrastructure and activity, at a large (regional) scale? In other words, how does reindeer selects for habitat at a 2nd order selection [sensu @johnson_comparison_1980]?
+
+Specific questions:
+
+-   Are there cumulative impacts of multiple disturbance of the same type, e.g. multiple turbines or multiple wind parks?
+-   Are there cumulative impacts of different types of disturbance, e.g. both wind power and mining?
+-   What is the zone of influence of the impacts, i.e. up to which distance from disturbance are reindeer behavior altered?
+-   Is the impact of wind turbines larger when they can be sighted by reindeer? **maybe we do not ask it here**
+-   How does the impacts change across seasons - calving, summer, and autumn?
+
+# Methods
+
+## Study area
+
+**This part could be moved to Appendix A where we just list data sources and describe the environmental variables.**
+
+The study was conducted in the Malå reindeer herding district, Sweden, in the area used by reindeer and reindeer herders during the snow free seasons, between May and November. 
+
+- Make a summary of the environmental data. What habitat types, how many wind turbines, size of the mine, how many km of roads etc. Add this as table B1.
+- Make a rough definition of how we defined the seasons - calving, summer, winter.
+
+**Should we also add here when each of the seasons started or ended? I think this is not necessary but if you think it is important, we can add it.**
+
+## Data
+
+```{r load_data, warning=FALSE, echo=FALSE}
+load("../../data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
+load("../../data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_rsf.RData")
+load("../../data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_rsf.RData")
+
+# calving
+summ_calving_year <- data_ready_calving_rsf_2h |> 
+  dplyr::group_by(year) |> 
+  dplyr::summarize(n = n(),
+                   n_ind = length(unique(id)))
+
+summ_calving <- apply(summ_calving_year, 2, sum)
+
+# summer
+summ_summer_year <- data_ready_summer_rsf_2h |> 
+  dplyr::group_by(year) |> 
+  dplyr::summarize(n = n(),
+                   n_ind = length(unique(id)))
+
+summ_summer <- apply(summ_summer_year, 2, sum)
+
+# autumn
+summ_autumn_year <- data_ready_autumn_rsf_2h |> 
+  dplyr::group_by(year) |> 
+  dplyr::summarize(n = n(),
+                   n_ind = length(unique(id)))
+
+summ_autumn <- apply(summ_autumn_year, 2, sum)
+```
+
+The analysis comprised data of `{r} summ_calving[3]` reindeer tracked during calving, `{r} summ_summer[3]` reindeer tracked during summer, and `{r} summ_autumn[3]` reindeer tracked during autumn, collected between 2008 and 2018. Table B2 shows the number of individuals and number of used GPS positions recorded in each year.
+
+```{r data_summary_year, echo=FALSE}
+#| label: data_summary_year
+#| fig-cap: "Table B2. Number of reindeer monitored (number of GPS positions recorded) in each year and season."
+#| 
+summ_data <- summ_calving_year |>
+  dplyr::mutate(Phase = c(rep("Before construction", 2),
+                          rep("Construction", 2),
+                          rep("Operation", 4)),
+                .after = 1) |> 
+  dplyr::rename(`n - calving` = n,
+                `number individuals - calving` = n_ind) |> 
+  dplyr::left_join(
+    summ_summer_year |> 
+      dplyr::rename(`n - summer` = n,
+                `number individuals - summer` = n_ind),
+    by = "year"
+  ) |> 
+  dplyr::left_join(
+    summ_autumn_year |> 
+      dplyr::rename(`n - autumn` = n,
+                `number individuals - autumn` = n_ind),
+    by = "year"
+  ) |> 
+  dplyr::rename(Year = year) |> 
+  dplyr::relocate(starts_with("number"), .after = "Phase")
+
+summ_data |> 
+  dplyr::mutate(Calving = paste0(`number individuals - calving`, " (", `n - calving`, ")"),
+                Summer = paste0(`number individuals - summer`, " (", `n - summer`, ")"),
+                Autumn = paste0(`number individuals - autumn`, " (", `n - autumn`, ")")) |> 
+  dplyr::select(Year, Phase, Calving, Summer, Autumn) |> 
+  DT::datatable()
+```
+
+**Should we add any more information here?**
+
+## Statistical modeling
+
+[develop it better later - **explain better the BA design, with baseline and the treatments (during, after)**]
+
+We modeled habitat selection using binomial regression following [@fieberg_how_2021]. Used GPS positions were compared to available positions spread randomly throughout the availability area. The area available was different across seasons (see Figs BXXX, below in **spatial predictions**) and it was defined by the reindeer herding community borders on the North, West, and South, and the fence **HOW TO CALL THIS FENCE?** in the East during calving. In summer and autumn the animals often cross the fence, so the eastern limits of the availability area were defined by a buffer around the used positions, accounting for the reindeer herding community borders and the main roads. 
+We ran models using use/availability as a response variable and the effects of wind power, mining, and other infrastructure (private and public roads, power lines, houses, trails) as covariates. We also added other land cover and phenology related variables - elevation, slope, aspect, terrain position index, and start of season date (or end of season for autumn; these are a phenological variables based on NDVI that show the peak greening and browning of the vegetation in spring and autumn). Given our questions, our focus was mainly on estimating the impacts of wind power and mining, so the other varibles were mainly included to control for their possible, additive effects.
+
+We assessed if and how the impacts of wind power and mining accumulated using the approach from Niebuhr et al. [-@niebuhr_estimating_2023]. To represent the spatial influence of wind power and mining, we computed zones of influence (ZOI) that decayed exponentially from the disturbance source and vanished at varying distances, from 100 m to 10 km. [**explain more what do they mean**] For wind power, we computed both the cumulative ZOI and the ZOI of the nearest feature; for mining we only considered the ZoI of the nearest mine, since there is only one main mining site in the study area. For simplicity, the influence of all other infrastructure tyåes was modeled using the log-distance to the nearest feature. We built binomial regression models using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI and an additive effect of all the other variables. Models were compared through the Akaike information criterion (AIC), and the most parsimonious model was selected as the one with smaller AIC [@burnham_model_2002].
+
+[*should we add here a figure about the ZOI and how they look like? should we have a conceptual figure in the paper?*]
+
+[**should we add the test with interaction between mining and turbines as well? We tried it before but I haven't reported it here.**]
+
+To detect the the impact of the mine and the other infrastructure on reindeer habitat selection (question 2), we looked whether the coefficients showing their influence were different from zero, and if so if they represented avoidance or selection (avoidance is represented by negative coefficients for the ZOI variables and positive coefficients for the log-distance variables; selection is represented by the opposite signals). To detect the impact of the wind turbines (question 2), we included an interaction between the ZOI of the wind turbines, land cover types, and the construction phase (with three categories - before construction, during contruction, and operation phase). To assess whether there was a cumulative impact of the multiple turbines and wind parks (question 1), we compared the AIC of the models including only the ZOI of the nearest turbine or the cumulative ZOI (which represents a weighted density of turbines within a radius). Finally, the radius of the zone of influence of the mines and the wind turbines (question 3) was determined by the variable selection process described above. Each analyses was done separately for each season, to assess the seasonal variation in habitat selection by reindeer (question 4).
+
+**Describe how we plotted results etc.**
+
+# Results
+
+## Model selection
+
+Summary of best ranked models:
+
+-   Calving: Log-distance to the nearest feature, viewshed\
+    `y ~ wind_zoi_nearest_5km*phase*landcover + mining_zoi_nearest_10km + ...`
+
+-   Summer: Log-distance to the nearest feature, viewshed\
+    `y ~ wind_zoi_cumulative_10km*phase*viewshed + mining_zoi_nearest_10km + ...`
+
+-   Autumn: ZoI of the nearest feature with radius = 10km, land cover\
+    `y ~ wind_zoi_nearest_10km*phase*landcover + mining_zoi_nearest_10km + ...`
+
+### Calving
+
+Table B3 shows the ranking of most parsimonious model for 2nd order habitat selection 
+during calving. The best model for calving included the additive effect of mining at 10 km radius and 
+of the zone of influence of the nearest wind turbine at 5 km radius (Table B3). 
+The second, third, and forth ranking models also included ZOI of the nearest wind turbine
+at large scales, which does not support the hypothesis of cumulative impacts of multiple 
+wind turbines or parks during calving. All the best ranking models support a large ZOI radius
+for both the mine (10 km) and the wind turbines (5-10 km).
+
+```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
+#| label: aic_calving
+#| fig-cap: "Table B3. Table of model selection for the RSF models for calving."
+
+aic_calving <- readr::read_csv("../../output/rsf_results/rsf_calving_AIC_table_complete.csv")
+
+aic_calving |> 
+  dplyr::slice(-1) |> 
+  dplyr::mutate(dAIC = dAIC - dAIC[1]) |> 
+  dplyr::relocate(definition, .after = last_col()) |> 
+  dplyr::select(-lc) |>
+  dplyr::rename(`Mining ZOI radius` = 1,
+                `Wind turbine ZOI radius` = 2,
+                TPI = tpi,
+                AIC = aic,
+                formula = definition) |> 
+  DT::datatable()
+```
+
+### Summer
+
+Table B4 shows the ranking of most parsimonious model for 2nd order habitat selection 
+during summer. The best model for summer included the additive effect of mining at 10km radius and 
+of the cumulative zone of influence (density) of wind turbines at 10 km radius (Table B4).
+However, the effect size of the wind turbines was small (see Table B8 and Fig B2 below).
+All the best ranking models support a large ZOI radius for both the mine (5 - 10 km) and 
+the wind turbines (5-10 km).
+
+**Discuss better these results**
+
+```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
+#| label: aic_summer
+#| fig-cap: "Table B4. Table of model selection for the RSF models for summer."
+#| 
+aic_summer <- readr::read_csv("../../output/rsf_results/rsf_summer_AIC_table_complete.csv")
+
+aic_summer |> 
+  dplyr::slice(-1) |> 
+  dplyr::mutate(dAIC = dAIC - dAIC[1]) |> 
+  dplyr::relocate(definition, .after = last_col()) |> 
+  dplyr::select(-lc) |>
+  dplyr::rename(`Mining ZOI radius` = 1,
+                `Wind turbine ZOI radius` = 2,
+                TPI = tpi,
+                AIC = aic,
+                formula = definition) |> 
+  DT::datatable()
+
+# aic_summer |> 
+#   dplyr::slice(1:15)
+#   kableExtra::kable(caption = "Table of model selection for RSF analyses during summer.")
+```
+
+### Autumn
+
+Table B5 shows the ranking of most parsimonious model for 2nd order habitat selection 
+during autumn. The best model for autumn included the additive effect of mining at 10km radius and 
+of the zone of influence of the nearest wind turbine at 10km radius (Table B5). 
+All the best ranking models show evidence of a large ZOI radius for both the mine (10 km) and 
+the wind turbines (5-10 km).
+
+
+```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
+#| label: aic_autumn
+#| fig-cap: "Table B5. Table of model selection for the RSF models for autumn."
+
+aic_autumn <- readr::read_csv("../../output/rsf_results/rsf_autumn_AIC_table_complete.csv")
+
+aic_autumn |> 
+  dplyr::mutate(dAIC = dAIC - dAIC[1]) |> 
+  dplyr::relocate(definition, .after = last_col()) |> 
+  dplyr::select(-lc) |>
+  dplyr::rename(`Mining ZOI radius` = 1,
+                `Wind turbine ZOI radius` = 2,
+                TPI = tpi,
+                AIC = aic,
+                formula = definition) |> 
+  DT::datatable()
+```
+
+## Disturbance effects
+
+### Coefficients - general
+
+Here we show the coefficient estimates for all the infrastructure types, excluding wind turbines which present interactions in the model
+structure and are explored further down. The estimates are put together for the different seasons in table B6 
+so it is easy to compare the effects between them.
+
+The mine was strongly avoided in all seasons, mainly during calving. Public roads was also
+avoided in all seasons. Trails and private/dirt roads were avoided during calving and 
+summer, but were selected in autumn (**why??**). Power lines were avoided only during calving 
+and were selected in the other seasons. Houses were avoided during autumn, but were 
+select during calving and summer (*why??*)
+
+Discuss here:
+
+- effect of houses
+- effects during autumn
+- should we add the land cover types here?
+
+```{r coef_general, warning=FALSE, message=FALSE, echo=FALSE}
+#| label: coef_general
+#| fig-cap: "Table B6. Coefficient estimates for the infrastructure types and the start/end of season for all three seasons."
+#| 
+# read calving
+coef_calving <- readr::read_csv("../../output/rsf_results/rsf_calving_coef_table_log_landcover.csv") |> 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
+                select = case_when(
+                  (estimate > 0 & grepl("log", term) & significant == 1) | (estimate < 0 & !grepl("log", term) & significant == 1) ~ "avoidance",
+                  (estimate < 0 & grepl("log", term) & significant == 1) | (estimate > 0 & !grepl("log", term) & significant == 1) ~ "selection",
+                  TRUE ~ "no effect"
+                ))
+
+# read summer
+coef_summer <- readr::read_csv("../../output/rsf_results/rsf_summer_coef_table_log.csv") |> 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
+                select = case_when(
+                  (estimate > 0 & grepl("log", term) & significant == 1) | (estimate < 0 & !grepl("log", term) & significant == 1) ~ "avoidance",
+                  (estimate < 0 & grepl("log", term) & significant == 1) | (estimate > 0 & !grepl("log", term) & significant == 1) ~ "selection",
+                  TRUE ~ "no effect"
+                ))
+
+# read autumn
+coef_autumn <- readr::read_csv("../../output/rsf_results/rsf_autumn_coef_table_zoi.csv") |> 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
+                select = case_when(
+                  (estimate > 0 & grepl("log", term) & significant == 1) | (estimate < 0 & !grepl("log", term) & significant == 1) ~ "avoidance",
+                  (estimate < 0 & grepl("log", term) & significant == 1) | (estimate > 0 & !grepl("log", term) & significant == 1) ~ "selection",
+                  TRUE ~ "no effect"
+                ))
+
+coef_all <- dplyr::tibble(season = c(rep("calving", nrow(coef_calving)), 
+                          rep("summer", nrow(coef_summer)),
+                          rep("autumn", nrow(coef_autumn)))) |> 
+  cbind(
+    dplyr::bind_rows(coef_calving, coef_summer, coef_autumn)) |> 
+  dplyr::filter(grepl("log|nearest|sos|eos", term)) |> 
+  dplyr::filter(!grepl("wind", term)) |> 
+  dplyr::select(-c(statistic, significant, p.value)) |> 
+  dplyr::arrange(term)
+
+coef_all |> 
+  DT::datatable()
+```
+
+#### Coefficients - Calving
+
+Here we present all the coefficient estimates for calving.
+
+```{r, echo=FALSE}
+#| label: coef_calving
+#| fig-cap: "Table B7. Coefficient estimates for the regional habitat selection functions during calving."
+ 
+coef_calving |> 
+  dplyr::select(-c(statistic, significant, p.value)) |>
+  DT::datatable()
+```
+
+#### Coefficients - Summer
+
+Here we present all the coefficient estimates for summer.
+
+```{r, echo=FALSE}
+#| label: coef_summer
+#| fig-cap: "Table B8. Coefficient estimates for the regional habitat selection functions during summer."
+
+coef_summer |> 
+  dplyr::select(-c(statistic, significant, p.value)) |>
+  DT::datatable()
+```
+
+#### Coefficients - Autumn
+
+Here we present all the coefficient estimates for autumn
+
+```{r, echo=FALSE}
+#| label: coef_autumn
+#| fig-cap: "Table B9. Coefficient estimates for the regional habitat selection functions during autumn."
+
+coef_autumn |> 
+  dplyr::select(-c(statistic, significant, p.value)) |>
+  DT::datatable()
+```
+
+## Model predictions
+
+Here we plot, for each season, the effect of the mine and the wind turbines, while
+keeping all the other variables at their median values, to illustrate the mean
+effect of these two types of infrastructure.
+
+### Calving
+
+Effect of the mine:
+
+![Figure B1. Relative probability of use of areas versus the distance to the mine in Kristineberget in calving.](../../output/rsf_results/rsf_calving_mining.png)
+
+Effect of the wind turbines before, during, and after the construction of the wind farms, for different land use types:
+
+![Figure B2. Relative probability of use of areas versus the distance to the nearest wind turbine in calving, using Jokkmokksliden wind park as a reference.](../../output/rsf_results/rsf_calving_wind_phase_landcc_jokkmokksliden.png)
+
+Open lands, clear cuts, coniferous forests, and mires were avoided up to 2.5-5 km from the
+wind turbines, when we compare the reindeer behavior before and during (after) the 
+construction of the turbines. Deciduous forests and forested wetlands in the proximity 
+of the wind parks were also avoided during construction phase, but deciduous forests
+were slightly more strongly selected in the operation phase, if compared to the baseline.
+
+
+The effect is qualitatively similar for all when reindeer are closer to each of the four wind parks, but is smaller when
+close to Åmliden wind park in the Southeast, most probably because of joint effect of the fence which is a barrier for
+reindeer movement.
+
+**Do we need to add the other figures for each wind park?**
+
+### Summer
+
+Effect of the mine:
+
+![Figure B3. Relative probability of use of areas versus the distance to the mine in Kristineberget in summer.](../../output/rsf_results/rsf_summer_mining.png)
+
+Effect of the wind turbines before, during, and after the construction of the wind farms, for different land use types:
+
+![Figure B4. Relative probability of use of areas versus the distance to the nearest wind turbine in summer, using Jokkmokksliden wind park as a reference.](../../output/rsf_results/rsf_summer_wind_phase_landcc_jokkmokksliden.png)
+
+### Autumn
+
+Effect of the mine:
+
+![Figure B5. Relative probability of use of areas versus the distance to the mine in Kristineberget in autumn.](../../output/rsf_results/rsf_autumn_mining.png)
+
+Effect of the wind turbines before, during, and after the construction of the wind farms, for different land use types:
+
+![Figure B6. Relative probability of use of areas versus the distance to the nearest wind turbine in autumn, using Storliden wind park as a reference.](../../output/rsf_results/rsf_autumn_wind_phase_landcc_storliden.png)
+
+In the proximity of the wind turbines, deciduous forests, forested wetlands, and mires 
+were avoided more strongly in the construction and operation phases, compared to the 
+baseline. Urban areas were also more avoided in the operation phase. In contrast,
+open areas were used more often in the construction phase than in the baseline
+(**does it make sense??**)
+
+The effect is qualitatively similar for all when reindeer are closer to each of the four wind parks, but is smaller when
+close to Åmliden wind park in the Southeast, most probably because of joint effect of the fence which is a barrier for
+reindeer movement.
+
+## Spatial predictions
+
+Here we show the baseline habitat suitability for each season before the construction of the wind turbines.
+We also show the difference in habitat suitability between for the wind turbine construction and operation
+phases, in comparison with the baseline habitat suitability.
+
+#### Calving
+
+![Figure B7.](../../output/rsf_results/maps_calving.png)
+
+
+#### Summer
+
+![Figure B8.](../../output/rsf_results/maps_summer.png)
+
+```{r, echo=FALSE, eval=FALSE}
+# read prediction rasters
+dir <- "../../output/spatial_predictions/"
+summer_files <- list.files(dir, full.names = T, pattern = "summer")
+summer_maps <- terra::rast(summer_files)
+# plot(calving_maps)
+
+# read wind turbines vector
+dir2 <- "../../maps/shp/"
+wt_file <- list.files(dir2, full.names = T, pattern = "wind") |> 
+  grep(pattern = ".shp$", value = T)
+wt <- sf::st_read(wt_file)
+
+# read mine vector
+mine_file <- list.files(dir2, full.names = T, pattern = "mine") |> 
+  grep(pattern = ".shp$", value = T)
+mine <- sf::st_read(mine_file)
+
+# plot
+summer_maps <- summer_maps * 1
+tm_shape(summer_maps) +
+  tm_raster(palette = "Greens") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+
+# normalize 97.5%
+summer_max <- terra::global(summer_maps[[1]], quantile, probs = 0.975, na.rm = T)[1,1]
+summer_maps <- terra::ifel(summer_maps > summer_max, summer_max, summer_maps)
+summer_maps <- oneimpact::raster_rescale(summer_maps)                         
+# plot(summer_maps)
+
+tm_shape(summer_maps) +
+  tm_raster(palette = "Greens") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+
+summer_BA <- summer_maps[[3]] - summer_maps[[1]]
+summer_BD <- summer_maps[[2]] - summer_maps[[1]]
+summer_comparison <- c(summer_BD, summer_BA)
+names(summer_comparison) <- c("before-during", "before-after")
+# plot(calving_comparison)
+tm_shape(summer_comparison) +
+  tm_raster(palette = "PRGn") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+#tmaptools::palette_explorer()
+```
+
+#### Autumn
+
+![Figure B9.](../../output/rsf_results/maps_autumn.png)
+
+```{r, echo=FALSE, eval=FALSE}
+# read prediction rasters
+dir <- "../../output/spatial_predictions/"
+autumn_files <- list.files(dir, full.names = T, pattern = "autumn")
+autumn_maps <- terra::rast(autumn_files)
+# plot(calving_maps)
+
+# read wind turbines vector
+dir2 <- "../../maps/shp/"
+wt_file <- list.files(dir2, full.names = T, pattern = "wind") |> 
+  grep(pattern = ".shp$", value = T)
+wt <- sf::st_read(wt_file)
+
+# read mine vector
+mine_file <- list.files(dir2, full.names = T, pattern = "mine") |> 
+  grep(pattern = ".shp$", value = T)
+mine <- sf::st_read(mine_file)
+
+# plot
+autumn_maps <- autumn_maps * 1
+tm_shape(autumn_maps) +
+  tm_raster(palette = "Greens") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+
+# normalize 97.5%
+autumn_max <- terra::global(autumn_maps[[1]], quantile, probs = 0.975, na.rm = T)[1,1]
+autumn_maps <- terra::ifel(autumn_maps > autumn_max, autumn_max, autumn_maps)
+autumn_maps <- oneimpact::raster_rescale(autumn_maps)                         
+# plot(autumn_maps)
+
+tm_shape(autumn_maps) +
+  tm_raster(palette = "Greens") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+
+autumn_BA <- autumn_maps[[3]] - autumn_maps[[1]]
+autumn_BD <- autumn_maps[[2]] - autumn_maps[[1]]
+autumn_comparison <- c(autumn_BD, autumn_BA)
+names(autumn_comparison) <- c("before-during", "before-after")
+# plot(calving_comparison)
+tm_shape(autumn_comparison) +
+  tm_raster(palette = "PRGn") +
+  tm_shape(wt, is.master = T) +
+  tm_dots() +
+  tm_shape(mine) +
+  tm_borders(col = "red")
+#tmaptools::palette_explorer()
+```

@@ -39,6 +39,13 @@ data_ready_summer_rsf_2h
 # weights - not used
 data_ready_summer_rsf_2h$w_obs <- ifelse(data_ready_summer_rsf_2h$case_, 1, 5000)
 
+data_ready_summer_rsf_2h <- data_ready_summer_rsf_2h |> 
+  dplyr::mutate(landcover_cc_grouped = forcats::fct_collapse(landcover_cc, 
+                                                             "deciduous forests" = c("deciduous forests", "forested wetlands"),
+                                                             "open lands" = c("open lands", "clear cuts")),
+                landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
+levels(data_ready_summer_rsf_2h$landcover_cc_grouped)
+
 summary(data_ready_summer_rsf_2h$wind_turbines_dist_comb)
 #hist(data_ready_summer_rsf_2h$wind_turbines_dist_comb+1, breaks = 100, xlim = c(0, 10000))
 
@@ -50,7 +57,7 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
   log(trails_dist+1) + 
   log(house_dist+1) + log(mining_Krist_dist+1) +
-  wf_name + landcover_cc*phase*log(wind_turbines_dist_comb+1)
+  wf_name + landcover_cc_grouped*phase*log(wind_turbines_dist_comb+1)
 
 fit1 <- glm(update(base_formula, ~ . + tpi_cat_s150m), 
             data = data_ready_summer_rsf_2h, #weights = w_obs,
@@ -82,18 +89,18 @@ fit2.3 <- glm(update(base_formula2, ~ . + tpi_cat_s510m),
 # compare
 (AICvals_phase <- bbmle::AICtab(fit2, fit2.2, fit2.3, weights = T, base = T))
 
-# compare viewshed and landcover_cc
+# compare viewshed and landcover_cc_grouped
 # formula_summer3 <- update(base_formula2, ~ . + tpi_cat_s150m - 
-#                              landcover_cc*phase*log(wind_dist_jsy+1) +
+#                              landcover_cc_grouped*phase*log(wind_dist_jsy+1) +
 #                              viewshed_lc*phase*log(wind_dist_jsy+1))
 # base_formula3 <- update(base_formula2, ~ . + tpi_cat_s150m -
-#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              landcover_cc_grouped*phase*log(wind_turbines_dist_comb+1) +
 #                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
 # base_formula3.2 <- update(base_formula2, ~ . + tpi_cat_s250m -
-#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              landcover_cc_grouped*phase*log(wind_turbines_dist_comb+1) +
 #                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
 # base_formula3.3 <- update(base_formula2, ~ . + tpi_cat_s510m -
-#                              landcover_cc*phase*log(wind_turbines_dist_comb+1) +
+#                              landcover_cc_grouped*phase*log(wind_turbines_dist_comb+1) +
 #                              viewshed_lc*phase*log(wind_turbines_dist_comb+1))
 # 
 # fit3 <- glm(base_formula3,
@@ -126,14 +133,14 @@ base_formula <- case_ ~ scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect
   log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
   log(trails_dist+1) + 
   log(house_dist+1) + scale(mining_Krist_nearestXXX) +
-  wf_name + landcover_cc*phase*scale(wind_turbines_ZZZ)
+  wf_name + landcover_cc_grouped*phase*scale(wind_turbines_ZZZ)
 
 # values for ZOI radii and metrics, TPI scales, and type of land cover variable
 scals <- c(100, 250, 500, 1000, 2500, 5000, 10000)
 zois <- c("nearest", "cumulative")
 wind_scals <- paste0(rep(zois, each = length(scals)), rep(scals, length(zois)))
 tpi_scals <- c("tpi_cat_s150m", "tpi_cat_s250m", "tpi_cat_s510m")
-lc_var <- c("landcover_cc")#, "viewshed_lc")
+lc_var <- c("landcover_cc_grouped")#, "viewshed_lc")
 
 # n models = 7*2*14*3*1 = 588
 
@@ -148,7 +155,7 @@ for(i in scals) {
   for(tt in tpi_scals) {
   for(lc in lc_var) {
     updt <- paste0("~ . - scale(mining_Krist_nearestXXX) - ",
-                   "landcover_cc*phase*scale(wind_turbines_ZZZ) + ", 
+                   "landcover_cc_grouped*phase*scale(wind_turbines_ZZZ) + ", 
                    tt, " + ",
                    paste0("scale(mining_Krist_nearest", i, ") + "),
                    paste0(lc, "*phase*scale(wind_turbines_", j, ")"))
@@ -180,7 +187,7 @@ fits
   dplyr::bind_rows(
     tibble::tibble(mining = "log", wind = "log", 
                    tpi = "tpi_cat_s510m",
-                   lc = "landcover_cc",
+                   lc = "landcover_cc_grouped",
                    aic = AIC(best_fit),
                    definition = paste(as.character(best_fit$formula)[c(2,1,3)], collapse = " "))) |>
   dplyr::mutate(dAIC = abs(aic - min(aic))) |>
@@ -188,13 +195,13 @@ fits
   dplyr::arrange(dAIC))
 
 tab_models |>
-  readr::write_csv(file = "output/01_traditional_fit/rsf_summer_AIC_table_complete.csv")
+  readr::write_csv(file = "output/rsf_results/rsf_summer_AIC_table_complete.csv")
 
-# save(tab_models, file = "output/summer_multi_zoi_table.rda")
+# save(tab_models, file = "output/rsf_summer_multi_zoi_table_landcover_grouped.rda")
 
 #---------------
 # Re-run best model
-load("output/rsf_summer_multi_zoi_table_landcover.rda")
+load("output/rsf_summer_multi_zoi_table_landcover_grouped.rda")
 tab_models
 
 form <- tab_models$definition[2]
@@ -221,14 +228,14 @@ m1_plot <- broom::tidy(best_fit) %>%
   theme_light() + 
   coord_flip()
 m1_plot
-ggsave("rsf_summer_coefs_log.png", plot = m1_plot, path = "output/01_traditional_fit/", 
+ggsave("rsf_summer_coefs_log_lc_grouped.png", plot = m1_plot, path = "output/rsf_results//", 
        width = 20, height = 20, units = "cm", dpi = 300)
 
 model_call <- sapply(attr(AICvals_phase, "row.names"), function(x) paste(as.character(formula(eval(as.symbol(x))))[c(2,1,3)], collapse = " "))
 AICvals_phase %>% 
   dplyr::as_tibble(rownames = "model") %>%
   dplyr::mutate(definition = unname(model_call)) %>%
-  readr::write_csv(file = "output/01_traditional_fit/rsf_summer_AIC_table_log.csv")
+  readr::write_csv(file = "output/rsf_results//rsf_summer_AIC_table_log_lc_grouped.csv")
 
 summary(best_fit)
 coefs <- broom::tidy(best_fit) %>% 
@@ -236,13 +243,14 @@ coefs <- broom::tidy(best_fit) %>%
                 p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)))
 coefs %>% 
   mutate_if(is.numeric, round, digits = 3) %>% 
-  readr::write_csv(file = "output/01_traditional_fit/rsf_summer_coef_table_log.csv")
+  readr::write_csv(file = "output/rsf_results//rsf_summer_coef_table_log_lc_grouped.csv")
 
 
 #-------------------------------
 # predictions
 
 cols <- rev(RColorBrewer::brewer.pal(3, "Set1"))
+cols <- c("#009E73", "#0072B2", "#D55E00")
 
 # averaged over all conditions, only slope
 pr_slp <- ggpredict(best_fit, terms = "slope",
@@ -265,9 +273,28 @@ plot(pr_slp, lim = c(0, 1)) +
 #        width = 15, height = 12, units = "cm", dpi = 300)
 
 # wind dist, phase, and land cover, for ytteberg
-pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc"),
+pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
                            typical = "median", condition = c(wf_name = "ytteberg"))
-#, condition = c(landcover_cc = "coniferous forests"))
+#, condition = c(landcover_cc_grouped = "coniferous forests"))
+# zoi_limit <- 0.05; radius <- 10000
+# lambda <- log(1/zoi_limit) / radius
+# pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
+# pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+
+g_wind <- pr_wind_phase |> #_df |>
+  plot(show_title = FALSE, 
+       colors = cols) +
+  # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+  labs(x = "ZOI of wind turbines (m)",
+       y = "Predicted probability of use",
+       colour = "Phase")
+  # ylim(0.05, 0.2) +
+  # xlim(0, 5)
+g_wind
+
+ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_original_scale.png", plot = g_wind,
+       width = 20, height = 20, units = "cm", dpi = 300)
+
 zoi_limit <- 0.05; radius <- 10000
 lambda <- log(1/zoi_limit) / radius
 pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
@@ -277,24 +304,25 @@ g_wind <- pr_wind_phase_df |>
   plot(show_title = FALSE, 
        colors = cols) +
   # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-  labs(x = "Distance to wind turbines (m)",
+  labs(x = "ZOI of wind turbines (m)",
        y = "Predicted probability of use",
        colour = "Phase") +
-  ylim(0.05, 0.2) +
-  xlim(0, 5)
+  # ylim(0.05, 0.2) +
+  xlim(NA, 10)
 g_wind
 
-ggsave(filename = "output/01_traditional_fit/summer_wind_phase_landcc_ytte.png", plot = g_wind,
+ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_dist_negative.png", plot = g_wind,
        width = 20, height = 20, units = "cm", dpi = 300)
+
 
 # wind dist, phase, and land cover, for places closer to each of the WFs
 wfs <- levels(data_ready_summer_rsf_2h$wf_name)
 for(i in wfs) {
   
   print(i)
-  pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc"),
+  pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
                              typical = "median", condition = c(wf_name = i))
-  #, condition = c(landcover_cc = "coniferous forests"))
+  #, condition = c(landcover_cc_grouped = "coniferous forests"))
   zoi_limit <- 0.05; radius <- 10000
   lambda <- log(1/zoi_limit) / radius
   pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
@@ -311,7 +339,7 @@ for(i in wfs) {
     xlim(0, 10)
   g_wind
   
-  ggsave(filename = paste0("output/01_traditional_fit/rsf_summer_wind_phase_landcc_", i, ".png"), plot = g_wind, 
+  ggsave(filename = paste0("output/rsf_results//rsf_summer_wind_phase_landcc_grouped_", i, ".png"), plot = g_wind, 
          width = 20, height = 20, units = "cm", dpi = 300)
   
 }
@@ -332,8 +360,8 @@ g_mining <- pr_mining |>
        color = "Phase") +
   xlim(0, 20)
 g_mining
-ggsave(filename = "rsf_summer_mining.png", plot = g_mining, 
-       path = "output/01_traditional_fit/",
+ggsave(filename = "rsf_summer_mining_lc_grouped.png", plot = g_mining, 
+       path = "output/rsf_results//",
        width = 15, height = 12, units = "cm", dpi = 300)
 
 # roads
@@ -440,7 +468,7 @@ g_elevation <- pr_elevation %>%
   # xlim(0, NA)
 g_elevation
 ggsave(filename = "rsf_summer_elevation.png", plot = g_elevation, 
-       path = "output/01_traditional_fit/",
+       path = "output/rsf_results//",
        width = 15, height = 12, units = "cm", dpi = 300)
 
 # tpi
@@ -481,8 +509,15 @@ install.load::install_load("raster", "rasterVis", "terra", "arrow")
 # vindval data
 load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_rsf.RData")
 
+data_ready_summer_rsf_2h <- data_ready_summer_rsf_2h |> 
+  dplyr::mutate(landcover_cc_grouped = forcats::fct_collapse(landcover_cc, 
+                                                             "deciduous forests" = c("deciduous forests", "forested wetlands"),
+                                                             "open lands" = c("open lands", "clear cuts")),
+                landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
+levels(data_ready_summer_rsf_2h$landcover_cc_grouped)
+
 # model comparison
-load("output/rsf_summer_multi_zoi_table_landcover.rda")
+load("output/rsf_summer_multi_zoi_table_landcover_grouped.rda")
 
 # compare models
 tab_models
@@ -499,6 +534,13 @@ best_fit <- glm(form,
 maps_df <- arrow::read_parquet("maps/for_prediction/predictors.parquet")
 str(maps_df)
 
+maps_df <- maps_df |> 
+  dplyr::mutate(landcover_cc_grouped = forcats::fct_collapse(landcover_cc, 
+                                                             "deciduous forests" = c("deciduous forests", "forested wetlands"),
+                                                             "open lands" = c("open lands", "clear cuts")),
+                landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
+maps_df$landcover_cc_grouped
+
 template_map <- terra::vect("maps/availability_mala_late_summer.gpkg")
 
 # set sos and eos to match phase
@@ -510,26 +552,27 @@ unique(maps_before_df$phase)
 # predict
 pred_summer_before_construction <- predict(best_fit, maps_before_df, type = "response")
 # create raster
-maps_before_df$pred_calv_before <- pred_summer_before_construction
+maps_before_df$pred_sum_before <- pred_summer_before_construction
 str(maps_before_df)
 # fill raster with predicted values
 map_pred_summer_before_construction <- maps_before_df |> 
-  dplyr::select(x, y, pred_calv_before) |> 
+  dplyr::select(x, y, pred_sum_before) |> 
   terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
   terra::mask(mask = template_map)
 
 names(map_pred_summer_before_construction) <- "summer_before_construction"
 terra::plot(map_pred_summer_before_construction)
-terra::writeRaster(map_pred_summer_before_construction, filename = "output/spatial_predictions/rsf_map_prediction_summer_before_construction_phaseonly.tif", 
+terra::writeRaster(map_pred_summer_before_construction, filename = "output/rsf_spatial_predictions/rsf_map_prediction_summer_before_construction_lc_grouped.tif", 
                    gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 rm(pred_summer_before_construction)
+rm(maps_before_df)
 
 # summer during/construction --------------------------------
 
 # set sos and eos to match phase
 maps_during_df <- maps_df |>
-  dplyr::rename(eos=eos_before, sos=sos_before) # remove differences due to nvdi
+  dplyr::rename(eos=eos_during, sos=sos_during) # remove differences due to nvdi
 # dplyr::rename(eos=eos_during, sos=sos_during)
 maps_during_df$phase <- ifelse(maps_during_df$phase == "Operation", "Construction", maps_during_df$phase) |> 
   factor(levels = levels(maps_df$phase))
@@ -537,56 +580,59 @@ unique(maps_during_df$phase)
 # predict
 pred_summer_construction <- predict(best_fit, maps_during_df, type = "response")
 # create raster
-maps_during_df$pred_calv_during <- pred_summer_construction
+maps_during_df$pred_sum_during <- pred_summer_construction
 str(maps_during_df)
 # fill raster with predicted values
 map_pred_summer_construction <- maps_during_df |> 
-  dplyr::select(x, y, pred_calv_during) |> 
+  dplyr::select(x, y, pred_sum_during) |> 
   terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
   terra::mask(mask = template_map)
 
 names(map_pred_summer_construction) <- "summer_construction"
 terra::plot(map_pred_summer_construction)
-terra::writeRaster(map_pred_summer_construction, filename = "output/spatial_predictions/rsf_map_prediction_summer_construction_phaseonly.tif", 
+terra::writeRaster(map_pred_summer_construction, filename = "output/rsf_spatial_predictions/rsf_map_prediction_summer_construction_lc_grouped.tif", 
                    gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 rm(pred_summer_construction)
+rm(maps_during_df)
 
 # summer operation/after --------------------------------
 
 # set sos and eos to match phase
 maps_after_df <- maps_df |> 
-  dplyr::rename(eos=eos_before, sos=sos_before) # remove differences due to nvdi
+  dplyr::rename(eos=eos_after, sos=sos_after) # remove differences due to nvdi
 # dplyr::rename(eos=eos_after, sos=sos_after)
 unique(maps_after_df$phase)
 # predict
 pred_summer_operation <- terra::predict(best_fit, maps_after_df, type = "response")
 # create raster
-maps_after_df$pred_calv_after <- pred_summer_operation
+maps_after_df$pred_sum_after <- pred_summer_operation
 str(maps_after_df)
 # fill raster with predicted values
 map_pred_summer_operation <- maps_after_df |> 
-  dplyr::select(x, y, pred_calv_after) |> 
+  dplyr::select(x, y, pred_sum_after) |> 
   terra::rast(type = "xyz", crs = terra::crs(template_map)) |> 
   terra::mask(mask = template_map)
 
 names(map_pred_summer_operation) <- "summer_operation"
 terra::plot(map_pred_summer_operation)
-terra::writeRaster(map_pred_summer_operation, filename = "output/spatial_predictions/rsf_map_prediction_summer_operation_phaseonly.tif", 
+terra::writeRaster(map_pred_summer_operation, filename = "output/rsf_spatial_predictions/rsf_map_prediction_summer_operation_lc_grouped.tif", 
                    gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 rm(pred_summer_operation)
+rm(maps_after_df)
 
 #----
 # plot maps
 
-install.load::install_load("raster", "rasterVis", "terra", "arrow")
+install.load::install_load("terra", "arrow")
 library(tmap)
 
 # read maps
-f_m <- list.files("output/spatial_predictions/", pattern = "summer", full.names = TRUE) |> 
+f_m <- list.files("output/rsf_spatial_predictions/", pattern = "summer", full.names = TRUE) |> 
   grep(pattern = ".tif$", value = TRUE) |> 
-  grep(pattern = "phaseonly", value = TRUE)
+  grep(pattern = "lc_grouped", value = TRUE) |> 
+  grep(pattern = "difference", invert = TRUE, value = TRUE)
 
 maps_summer <- terra::rast(f_m)
 
@@ -620,7 +666,7 @@ maps_summer <- terra::rast(f_m)
 tmap_options(max.raster = c(plot = 5000, view = 2000))
 
 map_before <- maps_summer[[1]]
-map_before$summer_before_construction@ptr$range_max
+map_before$summer_before_construction@pntr$range_max
 p_maps_summer_before <- tmap::tm_shape(map_before) +
   tmap::tm_raster(palette = "Greens", style = "cont", title = "") +#breaks = seq(0, 0.6, by = 0.05)) +
   tmap::tm_layout(title = "Baseline habitat suitability in summer\n(before wind turbines)", legend.outside = TRUE)
@@ -654,16 +700,16 @@ p_maps_summer
 
 # Add polygon mining and polygon 5km + crosses for turbines in maps
 # Add scale and north
-tmap::tmap_save(p_maps_summer, filename = "output/01_traditional_fit/maps_summer.png", 
+tmap::tmap_save(p_maps_summer, filename = "output/rsf_results/rsf_maps_summer_lc_grouped.png", 
                 width = 20, height = 20, units = "cm", dpi = 300)
 
 # write maps difference
 maps_summer_diff |> 
-  terra::writeRaster(filename = "output/spatial_predictions/map_difference_rsf_summer.tif",
+  terra::writeRaster(filename = "output/rsf_spatial_predictions/rsf_map_difference_rsf_summer_lc_grouped.tif",
                      gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 maps_summer_prop |> 
-  terra::writeRaster(filename = "output/spatial_predictions/map_difference_prop_summer.tif",
+  terra::writeRaster(filename = "output/rsf_spatial_predictions/rsf_map_difference_prop_summer_lc_grouped.tif",
                      gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
 
 

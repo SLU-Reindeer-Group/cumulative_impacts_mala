@@ -1,8 +1,8 @@
-library(dplyr)
+library(tidyverse)
 
 # spatial prediction
-install.load::install_load("raster", "rasterVis", "terra", "stars", "arrow")
-
+install.load::install_load("raster", "rasterVis", "terra", "stars")
+# 
 # vindval data
 load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
 # 
@@ -175,18 +175,6 @@ wind_turbines_nearest10000 <- terra::rast("maps/wind_turbines_bin_zoi_nearest_ex
 names(wind_turbines_nearest10000) <- "wind_turbines_nearest10000"
 if(plot_maps) plot(wind_turbines_nearest10000)
 
-wind_turbines_nearest5000 <- terra::rast("maps/wind_turbines_bin_zoi_nearest_exp_decay5000.tif")
-names(wind_turbines_nearest5000) <- "wind_turbines_nearest5000"
-if(plot_maps) plot(wind_turbines_nearest5000)
-
-wind_turbines_cumulative10000 <- terra::rast("maps/wind_turbines_bin_zoi_cumulative_exp_decay10000.tif")
-names(wind_turbines_cumulative10000) <- "wind_turbines_cumulative10000"
-if(plot_maps) plot(wind_turbines_cumulative10000)
-
-wind_turbines_cumulative5000 <- terra::rast("maps/wind_turbines_bin_zoi_cumulative_exp_decay5000.tif")
-names(wind_turbines_cumulative5000) <- "wind_turbines_cumulative5000"
-if(plot_maps) plot(wind_turbines_cumulative5000)
-
 # wf name
 wf_name <- wind_dist_jsy
 vals <- apply(cbind(values(wind_dist_jokk), values(wind_dist_stor), values(wind_dist_ytte), values(wind_dist_aml)), 1, which.min)
@@ -218,10 +206,6 @@ if(plot_maps) plot(mining_dist)
 mining_Krist_nearest10000 <- terra::rast("maps/mining_Krist_bin_zoi_nearest_exp_decay10000.tif")
 names(mining_Krist_nearest10000) <- "mining_Krist_nearest10000"
 if(plot_maps) plot(mining_Krist_nearest10000)
-
-mining_Krist_nearest5000 <- terra::rast("maps/mining_Krist_bin_zoi_nearest_exp_decay5000.tif")
-names(mining_Krist_nearest5000) <- "mining_Krist_nearest5000"
-if(plot_maps) plot(mining_Krist_nearest5000)
 
 # small roads
 priv_road_dist <- terra::rast("maps/priv_road_dist.tif")
@@ -269,6 +253,7 @@ sos_elmore <- stars::read_stars(.x = "maps/ndvi/ok/sos_elmore.tif")
 
 # monthday
 md <- "0501"
+
 
 # eos
 eos_beck <- stars::read_stars(.x = "maps/ndvi/ok/eos_beck.tif")
@@ -319,7 +304,8 @@ if(plot_maps) terra::plot(viewshed_lc, legend = "topright")
 # prepare maps 
 
 maps_predictors <-
-  c(phase,
+  c(
+    phase,
     dem,
     slope,
     cos_aspect,
@@ -346,25 +332,10 @@ maps_predictors <-
     mining_dist,
     mining_Krist_nearest10000,
     wind_dist_comb,
-    wind_turbines_nearest5000,
     wind_turbines_nearest10000,
     wf_name
   )
-maps_predictors
 
 # add relevant ZOI variables
-#### This TIF is missing the layer wind_turbines_nearest5000, cumulative5000 and 10000 also, 
-#### mining5000 also, needs to be added
 terra::writeRaster(maps_predictors, filename = "maps/for_prediction/predictors.tif", 
-                   gdal = "COMPRESS=DEFLATE",
                    overwrite = TRUE)
-
-# transform into data.frame
-maps_predictors_df <- as.data.frame(maps_predictors, xy = TRUE, cell = TRUE, na.rm = FALSE)
-str(maps_predictors_df, max.level = 2)
-
-maps_predictors_df <- as.data.frame(c(mining_Krist_nearest5000, wind_turbines_cumulative5000, wind_turbines_cumulative10000), xy = TRUE, cell = TRUE, na.rm = FALSE)
-
-# save
-saveRDS(maps_predictors_df, file = "maps/for_prediction/predictors.rds")
-arrow::write_parquet(maps_predictors_df, "maps/for_prediction/predictors.parquet")

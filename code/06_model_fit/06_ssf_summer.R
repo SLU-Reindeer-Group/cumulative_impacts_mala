@@ -562,17 +562,17 @@ lambda <- log(1/zoi_limit) / radius
 mm <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:center")
 ss <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:scale")
 data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled*ss + mm
-lr_during_ci_se$df$wind_turbines_nearest5000_end_construction_scaled_x1 <- -log(lr_during_ci_se$df$wind_turbines_nearest5000_end_construction_scaled_x1*ss + mm + 0.000001)/lambda/1000
+lr_during_ci_se$df$wind_dist_const <- -log(lr_during_ci_se$df$wind_turbines_nearest5000_end_construction_scaled_x1*ss + mm + 0.000001)/lambda/1000
 
 mm <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_operation_scaled, "scaled:center")
 ss <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_operation_scaled, "scaled:scale")
 data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_operation_scaled*ss + mm
-lr_after_ci_se$df$wind_turbines_nearest5000_end_operation_scaled_x1 <- -log(lr_after_ci_se$df$wind_turbines_nearest5000_end_operation_scaled_x1*ss + mm + 0.000001)/lambda/1000
+lr_after_ci_se$df$wind_dist_op <- -log(lr_after_ci_se$df$wind_turbines_nearest5000_end_operation_scaled_x1*ss + mm + 0.000001)/lambda/1000
 summary(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_operation)
 
 fct_plot <- 1
-df_all <- bind_rows(dplyr::mutate(lr_during_ci_se$df, phase = "Construction", wind_dist = wind_turbines_nearest5000_end_construction_scaled_x1),
-                    dplyr::mutate(lr_after_ci_se$df, phase = "Operation", wind_dist = wind_turbines_nearest5000_end_operation_scaled_x1, 
+df_all <- bind_rows(dplyr::mutate(lr_during_ci_se$df, phase = "Construction", wind_dist = wind_dist_const, wind_zoi = wind_turbines_nearest5000_end_construction_scaled_x1),
+                    dplyr::mutate(lr_after_ci_se$df, phase = "Operation", wind_dist = wind_dist_op, wind_zoi = wind_turbines_nearest5000_end_operation_scaled_x1, 
                                   log_rss = fct_plot*log_rss,
                                   lwr = fct_plot*lwr, upr = fct_plot*upr))
 # pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
@@ -583,21 +583,21 @@ df_all <- bind_rows(dplyr::mutate(lr_during_ci_se$df, phase = "Construction", wi
 # oneimpact::predict(base_formula, newdata = newdat, coefs = coef(best_fit), include = colnames(newdat)[-1])
 
 # Plot using ggplot2
-g_wind <- ggplot(df_all, aes(x = wind_dist, y = exp(log_rss), linetype = phase)) +
-  # g_wind <- ggplot(df_all, aes(x = wind_dist, y = log_rss, linetype = phase)) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
-  # geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
-  geom_ribbon(aes(ymin = exp(lwr), ymax = exp(upr), linetype = phase),
-              # geom_ribbon(aes(ymin = lwr, ymax = upr, linetype = phase),
+# g_wind <- ggplot(df_all, aes(x = wind_dist, y = exp(log_rss), linetype = phase)) +
+g_wind <- ggplot(df_all, aes(x = wind_dist, y = log_rss, linetype = phase)) +
+  # geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
+  # geom_ribbon(aes(ymin = exp(lwr), ymax = exp(upr), linetype = phase),
+  geom_ribbon(aes(ymin = lwr, ymax = upr, linetype = phase),
               # linetype = "dashed", color = "black",
               alpha = 0.25) +
   geom_line(size = 1) +
   facet_wrap(phase~ landcover_cc_grouped_end_x1, nrow = 2) +
   xlab("Distance to wind farm (km)") +
-  ylab("Relative selection strength") +
+  ylab("log Relative selection strength") +
   # ylab("log(Relative selection strength)") +
   xlim(0, 10) +
-  ylim(0,5) +
+  # ylim(0,5) +
   # ylim(-1,1) +
   theme_bw() +
   theme(legend.position = "none")
@@ -609,21 +609,21 @@ ggsave(filename = "ssf_summer_wind.png", plot = g_wind,
 
 g_wind_const <- df_all |> 
   dplyr::filter(phase == "Construction") |> 
-  ggplot(aes(x = wind_dist, y = exp(log_rss))) +
-  # ggplot(aes(x = wind_dist, y = log_rss, linetype = phase)) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
-  # geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
-  geom_ribbon(aes(ymin = exp(lwr), ymax = exp(upr)),
-              # geom_ribbon(aes(ymin = lwr, ymax = upr, linetype = phase),
+  # ggplot(aes(x = wind_dist, y = exp(log_rss))) +
+  ggplot(aes(x = wind_dist, y = log_rss, linetype = phase)) +
+  # geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
+  # geom_ribbon(aes(ymin = exp(lwr), ymax = exp(upr)),
+  geom_ribbon(aes(ymin = lwr, ymax = upr, linetype = phase),
               # linetype = "dashed", color = "black",
               alpha = 0.25) +
   geom_line(size = 1) +
   facet_wrap(~ landcover_cc_grouped_end_x1, nrow = 1) +
   xlab("Distance to wind farm (km)") +
-  ylab("Relative selection strength") +
+  ylab("log Relative selection strength") +
   # ylab("log(Relative selection strength)") +
   xlim(0, 10) +
-  ylim(0,5) +
+  # ylim(0,5) +
   # ylim(-1,1) +
   theme_bw() +
   theme(legend.position = "none")
@@ -634,84 +634,81 @@ ggsave(filename = "ssf_summer_wind_const.png", plot = g_wind_const,
        width = 25, height = 12, units = "cm", dpi = 300)
 
 #---
-# prepare figures using 0/1 as the baseline
+# this below is a proof of concept, just to make sure it works
 
-mm <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:center")
-ss <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:scale")
-# data_ready_summer_ssf_2h$wind_turbines_cumulative5000_start_construction_scaled*ss + mm
-# (-log(data_ready_summer_ssf_2h$wind_turbines_cumulative5000_start_construction_scaled*ss + mm + 0.000001)/lambda/1000) |> range()
-(1*exp(-lambda * 0) - mm)/ss
-(1*exp(-lambda * 1000) - mm)/ss
-(1*exp(-lambda * 10000) - mm)/ss
-
-#----
-# construction
-
-# step lengths - on the turbines
-best_fit$model$formula
-summary(best_fit)
-
-parms <- broom::tidy(best_fit$model, conf.int = TRUE) |> 
-  dplyr::mutate(sig = ifelse(p.value < 0.05, -1, 1))
-parms |> print(n = 100)
-
-# land cover
-lc_lev <- levels(data_ready_summer_ssf_2h$landcover_cc_grouped_end)[-1] # remove ref level
-phase_lev <- tolower(levels(data_ready_summer_ssf_2h$phase)[-1])
-
-df_base <- data.frame(wind_dist = seq(0, 10000, length.out = 200))
-n_feat <- 1
-zoi_rad <- 5000
-zoi_shape <- "exp_decay"
-zoi_values <- n_feat*oneimpact::dist_decay(df_base$wind_dist, radius = zoi_rad, type = zoi_shape)
-
-ph <- phase_lev[1]
-lc <- lc_lev[1]
-for(ph in phase_lev) {
-  for(lc in lc_lev) {
-    lc_parm <- data.frame(estimate = best_fit$model$coefficients[paste0("wind_turbines_nearest5000_end_", ph, "_scaled")] +
-                            best_fit$model$coefficients[paste0("landcover_cc_grouped_end", lc, ":wind_turbines_nearest5000_end_", ph, "_scaled")],
-                          lower = parms$conf.low[parms$term == paste0("wind_turbines_nearest5000_end_", ph, "_scaled")] +
-                            parms$conf.low[parms$term == paste0("landcover_cc_grouped_end", lc, ":wind_turbines_nearest5000_end_", ph, "_scaled")],
-                          higher = parms$conf.high[parms$term == paste0("wind_turbines_nearest5000_end_", ph, "_scaled")] +
-                            parms$conf.high[parms$term == paste0("landcover_cc_grouped_end", lc, ":wind_turbines_nearest5000_end_", ph, "_scaled")])
-    
-    df_class <- df_base
-    df_class[[paste0("med")]] <- lc_parm$estimate * zoi_values
-    df_class[[paste0("lwr")]] <- lc_parm$lower * zoi_values
-    df_class[[paste0("upr")]] <- lc_parm$higher * zoi_values
-    df_class$class <- lc
-    df_class$phase <- ph
-    
-    if(lc == lc_lev[1] & ph == phase_lev[1]) {
-      df <- df_class
-    } else {
-      df <- rbind(df, df_class)
-    }
-  }
-}
-
-g_wind_zoi <- ggplot(df, aes(x = wind_dist/1000, y = exp(med))) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
-  geom_line() +
-  geom_ribbon(aes(ymin = exp(lwr), ymax = exp(upr)),
-              # geom_ribbon(aes(ymin = lwr, ymax = upr, linetype = phase),
-              # linetype = "dashed", color = "black",
-              alpha = 0.25) +
-  facet_wrap(phase~class, ncol = 4) +
-  xlab("Distance to wind farm (km)") +
-  ylab("Relative selection strength") +
-  # ylab("log(Relative selection strength)") +
-  xlim(0, 10) +
-  ylim(0,2) +
-  # ylim(-1,1) +
-  theme_bw() +
-  theme(legend.position = "none")
-g_wind_zoi
-
-ggsave(filename = "ssf_summer_wind_zoi.png", plot = g_wind_zoi, 
-       path = "output/ssf_results/",
-       width = 20, height = 20, units = "cm", dpi = 300)
+#' zoi_limit <- 0.05; radius <- 5000
+#' # lambda1 <- log(1/zoi_limit) / radius1
+#' lambda <- log(1/zoi_limit) / radius
+#' # lr2$df$wind_turbines_cumulative5000_end_construction_scaled_x1 <- -log(lr2$df$wind_turbines_cumulative5000_end_construction_scaled_x1*ss + mm + 0.001)/lambda/1000
+#' # lr2_ci_se$df$wind_turbines_cumulative5000_end_construction_scaled_x1 <- -log(lr2_ci_se$df$wind_turbines_cumulative5000_end_construction_scaled_x1*ss + mm + 0.000001)/lambda/1000
+#' mm_op <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:center")
+#' ss_op <- attr(data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled, "scaled:scale")
+#' data_ready_summer_ssf_2h$wind_turbines_nearest5000_end_construction_scaled*ss_op + mm_op
+#' 
+#' df_base <- data.frame(wind_dist = seq(0, 20000, length.out = 4001))
+#' zoi_rad <- 10000
+#' zoi_shape <- "exp_decay"
+#' df_base$zoi_n1 <- 1*oneimpact::dist_decay(df_base$wind_dist, radius = zoi_rad, type = zoi_shape)
+#' 
+#' #' Function to get the closes match between two vectors
+#' #' 
+#' #' @param x,y numeric. The two vectors.
+#' #' @param return character. If `"value"`, returns the values of y that are
+#' #' closest to the values in x. If `"index"`, returns the indices of the values
+#' #' in y that are closest to the values in x. 
+#' get_closest_match <- function(x, y, return = c("value", "index")[1]) {
+#'   
+#'   # Initialize a vector to store the closest matches
+#'   closest_matches <- numeric(length(x))
+#'   
+#'   # Loop through vector1 and find the closest match in vector2
+#'   for (i in seq_along(x)) {
+#'     current_value <- x[i]
+#'     closest_index <- which.min(abs(y - current_value))
+#'     if(return == "value") closest_matches[i] <- y[closest_index]
+#'     else if(return == "index") closest_matches[i] <- closest_index
+#'   }
+#'   
+#'   closest_matches
+#' }
+#' vector1 <- c(1, 3, 7, 10)
+#' vector2 <- c(0, 2, 6, 8, 11)
+#' get_closest_match(vector1, vector2)
+#' get_closest_match(vector1, vector2, return = "index")
+#' 
+#' # get rows of closes match
+#' rows_n1 <- get_closest_match(df_all$wind_zoi*ss_op + mm_op, 
+#'                              df_base$zoi_n1, return = "index")
+#' 
+#' # get distance
+#' df_all$dist_wind_n1 <- df_base$wind_dist[rows_n1]/1000
+#' 
+#' g_wind_n1 <- df_all |> 
+#'   dplyr::filter(!(dist_wind_n1 == 0)) |> 
+#'   ggplot() +
+#'   # g_wind <- ggplot(df_all, aes(x = wind_dist, y = log_rss, linetype = phase)) +
+#'   # geom_hline(yintercept = 1, linetype = "dashed", color = "gray30") +
+#'   geom_hline(yintercept = 0, linetype = "dashed", color = "gray30") +
+#'   # geom_ribbon(aes(x = dist_wind, ymin = exp(lwr), ymax = exp(upr)),
+#'   geom_ribbon(aes(x = dist_wind_n1, ymin = lwr, ymax = upr),
+#'               # linetype = "dashed", color = "black",
+#'               alpha = 0.25) +
+#'   geom_line(aes(x = dist_wind_n1, y = log_rss), size = 1) +
+#'   # geom_line(aes(x = dist_wind, y = exp(log_rss)), size = 1, linetype = 2) +
+#'   facet_wrap(phase ~ landcover_cc_grouped_end_x1, nrow = 2) +
+#'   xlab("Distance from wind turbines (km)") +
+#'   ylab("log Relative selection strength") +
+#'   # ylab("log(Relative selection strength)") +
+#'   xlim(0, 10) +
+#'   # ylim(0,3) +
+#'   # ylim(-2,2) +
+#'   theme_bw() +
+#'   theme(legend.position = "none")
+#' g_wind_n1
+#' 
+#' ggsave(filename = "ssf_autumn_wind_const.png", plot = g_wind_const, 
+#'        path = "output/ssf_results/",
+#'        width = 25, height = 25, units = "cm", dpi = 300)
 
 #---
 # mining

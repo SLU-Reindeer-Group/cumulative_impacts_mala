@@ -30,7 +30,7 @@ Here we describe the data and the results of the local assessment of reindeer ha
 
 # Goals of the analysis
 
-The main question driving the iSSA analyses is: how is the selection of grazing sites by reindeer across seasons affected by wind power, mining, and other human infrastructure and activity, at a small (local) scale? And how are movement parameters (movement rates and directionality) affected by the presence of wind turbines, during both construction and operation phases of the wind farms?
+The main question driving the iSSA analyses is: how is the selection of grazing sites by reindeer across seasons affected by wind power, mining, and other human infrastructure and activity, at a local scale? And how are movement parameters (movement rates and directionality) affected by the presence of wind turbines, during both construction and operation phases of the wind farms?
 
 The specific questions are:
 
@@ -76,7 +76,9 @@ summ_autumn_year <- data_ready_autumn_ssf_2h |>
 summ_autumn <- apply(summ_autumn_year, 2, sum)
 ```
 
-The iSSA was based on data of `{r} summ_calving[3]` reindeer tracked during calving, `{r} summ_summer[3]` reindeer tracked during summer, and `{r} summ_autumn[3]` reindeer tracked during autumn, collected between 2008 and 2018. Table C1 shows the number of individuals and number of used GPS positions recorded in each year.
+GPS data was collected by Sami reindeer herders through GPS collaring female reindeer between 2008 and 2018. No data was collected between 2012 and 2014, the years that followed the construction of the wind farm. Data was collected with a 2 hour fix rate, and failures or gaps were not considered for the analyses, and used to define the separation of the movement tracks into bursts. Data was only included in the analysis if there was at least forty consecutive days of movement data for each individual. Data was manually checked for all reindeer-years so that all positions representing reindeer being herd or GPS position of collars not attached to animals were removed. Furthermore, we used Bjørneraas et al (2010) procedure to remove spikes and outliers, and removed all locations found within known fenced areas and corrals, which are typically used for reindeer handling.
+
+The iSSA was based on data of `{r} summ_calving[3]` reindeer tracked during calving, `{r} summ_summer[3]` reindeer tracked during summer, and `{r} summ_autumn[3]` reindeer tracked during autumn. Table C1 shows the number of individuals and number of used GPS positions recorded in each year.
 
 ```{r data_summary_year, echo=FALSE}
 #| label: data_summary_year
@@ -116,7 +118,7 @@ summ_data |>
 
 To assess the impact of mining, wind turbines, and other infrastructure on reindeer habitat selection at local scale and reindeer movement, we performed integrated step selection analyses [iSSA; @avgar_integrated_2016]. iSSA is designed to quantify simultaneaously the effects of the covariates on habitat selection and movement, while controlling for each other's mutual influence. In iSSA, the unit of analysis is the step or displacement made by reindeer between subsequent positions - here, 2 h from each other. Similarly to resource selection analyses, the data in put into a use-availability design. For each used step, we sampled 10 random steps starting in the same position. Step length and angle for the random steps were drawn from a Gamma distribution and a von Mises distribution fitted to the step lengths and turning angles for each individual, respectively. Random steps leaving the limits of the availability area in each season were excluded and redrawn. For each step, we extracted the environmental covariates at the end point of steps to assess habitat selection, and at the starting point of steps to assess effects on movement parameters.
 
-We prepared the data and performed the iSSA using the tools from the `amt` package in R [@signer_animal_2019] and followed the interpretation of parameters according to Fieberg et al. [-@fieberg_how_2021]. Models were fitted using conditional logistic regression through the function `amt::issf()`. They considered  use/availability as a response variable, the step id as the strata, and the effects of wind power, mining, and other infrastructure (private and public roads, power lines, houses, trails) as covariates. We also added other land cover and phenology related variables - elevation, slope, aspect, terrain position index (TPI), and date of the start of the season (SOS) (or end of season, EOS, for autumn). SOS and EOS are phenological variables based on NDVI that show the peak greening and browning of the vegetation in spring and autumn. Given our questions, our focus was mainly on estimating the impacts of wind power and mining, so the other variables were mainly included to control for their possible, additive effects. All variables that were not in log scale were standardized to mean 0 and variance 1, to facilitate convergence of the model fits.
+We prepared the data and performed the iSSA using the tools from the `amt` package in R [@signer_animal_2019] and followed the interpretation of parameters according to Fieberg et al. [-@fieberg_how_2021]. Models were fitted using conditional logistic regression through the function `amt::issf()`. They considered  use/availability as a response variable, the step id as the strata, and the effects of wind power, mining, and other infrastructure (private and public roads, power lines, houses, trails) as covariates. We also added other land cover and phenology related variables - elevation, slope, aspect, terrain position index (TPI), and date of the start of the season (SOS) (or end of season, EOS, for autumn). TPI is a measure of variation in the relief of a neighborhood, computed by comparing the elevation of a site with the average elevation on the neighborhood, for a given neighborhood size/scale [@de_reu_application_2013]. Here the TPI was computed using neighborhoods of different sizes (150 m, 250 m, and 510 m) and the best TPI scale was defined through model selection (see below). SOS and EOS are phenological variables based on NDVI that show the time of peak greening and browning of the vegetation in spring and autumn [@kong_phenofit_2022]. Given our questions, our focus was mainly on estimating the impacts of wind power and mining, so the other variables were mainly included to control for their possible, additive effects. All variables that were not in log scale were standardized to mean 0 and variance 1, to facilitate convergence of the model fits.
 
 We assessed if and how the impacts of wind power and mining accumulated using the approach from Niebuhr et al. [-@niebuhr_estimating_2023]. To represent the spatial influence of wind power and mining, we computed zones of influence (ZOI) that decayed exponentially from the disturbance source and vanished at varying distances, from 100 m to 10 km. For wind power, we computed both the density of wind turbines (representing the cumulative impact of multiple turbines) and the ZOI of the nearest feature (see the main text for details); for mining we only considered the ZOI of the nearest mine, since there is only one main mining site in the study area. For simplicity, the influence of all other infrastructure types was modeled using the log-distance to the nearest feature. To evaluate the impact of wind farms in a before-after setup, comparing the movement behavior of reindeer before, during, and after the construction of the wind farms, we created two variables to represent the influence of wind farms: `wind_ZOI_construction` and `wind_ZOI_operation`. Each of them assumed the value of the ZOI only during the construction and operation phases, respectively, and were zero otherwise. This means that they represented the effect of the wind turbines in the different phases, compared to the period before the construction, when the wind turbines were not present. 
 
@@ -133,10 +135,12 @@ base_formula <- case_ ~ strata(step_id_) +
   dem_end_scaled + I(dem_end_scaled^2) + slope_end_scaled +
   sos_end_scaled +
   log_power_lines_dist_end + log_priv_road_dist_end + log_public_road_dist_end +
-  log_house_dist_end + mining_Krist_nearestXXX_end_scaled + ## need to add scale XXX here
-  wf_name_end +
+  log_house_dist_end + 
   landcover_cc_grouped_end +
+  # minig habitat selection
+  mining_Krist_nearestXXX_end_scaled + 
   # wind habitat selection
+  wf_name_end +
   wind_turbines_YYY_end_construction_scaled +
   wind_turbines_ZZZ_end_operation_scaled +
   landcover_cc_grouped_end:wind_turbines_YYY_end_construction_scaled +
@@ -149,7 +153,7 @@ where `case_` is our response variable, `sl_`, `log_sl` and `cos_ta` are the mov
 
 The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection and movement, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI. Models were compared through the Akaike information criterion (AIC), and the most parsimonious model was selected as the one with smaller AIC [@burnham_model_2002].
 
-To interpret the results, we first checked the structure of the best ranking models (through the AIC and their difference; we considered model evidence different if $\Delta AIC$ > 2; Burnham and Anderson 2002) and compared how they differed qualitatively. Second, we evaluated the coefficients of the best ranked model for each season. Third, for habitat selection, we plotted the relative selection strength [RSS; @avgar_relative_2017] (or the log (RSS)) for wind turbines and land cover, as well as for mining. Finally, for movement patterns, we plotted the differences in movement rates and turning angles for movements close (distance = 0) and far (distance = 1 and 5 km) from the wind turbines, in each phase (construction/operation). We only plotted results when there was a significant effect.
+To interpret the results, we first checked the structure of the best ranking models (through the AIC and their difference; we considered models different if $\Delta AIC$ > 2; Burnham and Anderson 2002) and compared how they differed qualitatively. Second, we evaluated the coefficients of the best ranked model for each season. Third, for habitat selection, we plotted the relative selection strength [RSS; @avgar_relative_2017] (or the log (RSS)) for wind turbines and land cover, as well as for mining. Finally, for movement patterns, we plotted the differences in movement rates and turning angles for movements close (distance = 0) and far (distance = 1 and 5 km) from the wind turbines, in each phase (construction/operation). We only plotted results when there was a significant effect.
 
 # Results
 
@@ -178,10 +182,10 @@ Summary of best ranked models:
 -   **Calving. Cumulative impact of wind turbines, ZOI radius = 5 km; log-distance effect of the mine:** \
     `{r} paste(form_calving)`
 
--   **Summer. ZOI of the nearest wind turbine, radius = 5 km; ZOI of mine, radius 10 km:**\
+-   **Summer. ZOI of the nearest wind turbine, radius = 5 km; ZOI of the mine with radius 10 km:**\
     `{r} paste(form_summer)`
 
--   **Autumn. Cumulative ZOI of wind turbines, radius = 10km; neglegible effect of the mine:** \
+-   **Autumn. Cumulative ZOI of wind turbines, radius = 10km; negligible effect of the mine:** \
     `{r} paste(form_autumn)`
 
 ### Calving

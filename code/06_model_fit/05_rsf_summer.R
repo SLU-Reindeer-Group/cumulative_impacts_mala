@@ -273,7 +273,7 @@ plot(pr_slp, lim = c(0, 1)) +
 #        width = 15, height = 12, units = "cm", dpi = 300)
 
 # wind dist, phase, and land cover, for ytteberg
-pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
+pr_wind_phase <- ggpredict(best_fit,  terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
                            typical = "median", condition = c(wf_name = "ytteberg"))
 #, condition = c(landcover_cc_grouped = "coniferous forests"))
 # zoi_limit <- 0.05; radius <- 10000
@@ -285,64 +285,149 @@ g_wind <- pr_wind_phase |> #_df |>
   plot(show_title = FALSE, 
        colors = cols) +
   # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-  labs(x = "ZOI of wind turbines (m)",
+  labs(x = "Density of wind turbines",
        y = "Predicted probability of use",
        colour = "Phase")
   # ylim(0.05, 0.2) +
   # xlim(0, 5)
 g_wind
 
-ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_original_scale.png", plot = g_wind,
+ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_density.png", plot = g_wind,
        width = 20, height = 20, units = "cm", dpi = 300)
 
+#---
+# coming back to distance scale
 zoi_limit <- 0.05; radius <- 10000
+# lambda1 <- log(1/zoi_limit) / radius1
 lambda <- log(1/zoi_limit) / radius
-pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
-pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+# lr2$df$wind_turbines_cumulative5000_end_construction_scaled_x1 <- -log(lr2$df$wind_turbines_cumulative5000_end_construction_scaled_x1*ss + mm + 0.001)/lambda/1000
+# lr2_ci_se$df$wind_turbines_cumulative5000_end_construction_scaled_x1 <- -log(lr2_ci_se$df$wind_turbines_cumulative5000_end_construction_scaled_x1*ss + mm + 0.000001)/lambda/1000
 
-g_wind <- pr_wind_phase_df |>
-  plot(show_title = FALSE, 
-       colors = cols) +
-  # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-  labs(x = "ZOI of wind turbines (m)",
-       y = "Predicted probability of use",
-       colour = "Phase") +
-  # ylim(0.05, 0.2) +
-  xlim(NA, 10)
-g_wind
+df_base <- data.frame(wind_dist = seq(0, 40000, length.out = 4001))
+zoi_rad <- 10000
+zoi_shape <- "exp_decay"
+df_base$zoi_n1 <- 1*oneimpact::dist_decay(df_base$wind_dist, radius = zoi_rad, type = zoi_shape)
+df_base$zoi_n10 <- 20*oneimpact::dist_decay(df_base$wind_dist, radius = zoi_rad, type = zoi_shape)
+summary(df_base)
+summary(pr_wind_phase$x)
 
-ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_dist_negative.png", plot = g_wind,
-       width = 20, height = 20, units = "cm", dpi = 300)
-
-
-# wind dist, phase, and land cover, for places closer to each of the WFs
-wfs <- levels(data_ready_summer_rsf_2h$wf_name)
-for(i in wfs) {
+#' Function to get the closes match between two vectors
+#' 
+#' @param x,y numeric. The two vectors.
+#' @param return character. If `"value"`, returns the values of y that are
+#' closest to the values in x. If `"index"`, returns the indices of the values
+#' in y that are closest to the values in x. 
+get_closest_match <- function(x, y, return = c("value", "index")[1]) {
   
-  print(i)
-  pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
-                             typical = "median", condition = c(wf_name = i))
-  #, condition = c(landcover_cc_grouped = "coniferous forests"))
-  zoi_limit <- 0.05; radius <- 10000
-  lambda <- log(1/zoi_limit) / radius
-  pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
-  pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+  # Initialize a vector to store the closest matches
+  closest_matches <- numeric(length(x))
   
-  g_wind <- pr_wind_phase_df |>
-    plot(show_title = FALSE, colors = cols) +
-    geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
-    geom_vline(xintercept = 5, linetype = 2, color = "grey") +
-    labs(x = "Distance to wind turbines (m)",
-         y = "Relative probability of use",
-         colour = "Phase") +
-    #ylim(0, 1) +
-    xlim(0, 10)
-  g_wind
+  # Loop through vector1 and find the closest match in vector2
+  for (i in seq_along(x)) {
+    current_value <- x[i]
+    closest_index <- which.min(abs(y - current_value))
+    if(return == "value") closest_matches[i] <- y[closest_index]
+    else if(return == "index") closest_matches[i] <- closest_index
+  }
   
-  ggsave(filename = paste0("output/rsf_results//rsf_summer_wind_phase_landcc_grouped_", i, ".png"), plot = g_wind, 
-         width = 20, height = 20, units = "cm", dpi = 300)
-  
+  closest_matches
 }
+vector1 <- c(1, 3, 7, 10)
+vector2 <- c(0, 2, 6, 8, 11)
+get_closest_match(vector1, vector2)
+get_closest_match(vector1, vector2, return = "index")
+
+# get rows of closes match
+pr_wind_phase_dist <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+
+rows_n1 <- get_closest_match(pr_wind_phase_dist$x, 
+                             df_base$zoi_n1, return = "index")
+rows_n10 <- get_closest_match(pr_wind_phase_dist$x, 
+                              df_base$zoi_n10, return = "index")
+
+# get distance
+pr_wind_phase_dist$dist_wind_n1 <- df_base$wind_dist[rows_n1]/1000
+pr_wind_phase_dist$dist_wind_n10 <- df_base$wind_dist[rows_n10]/1000
+
+pr_wind_phase_dist <- tibble::as_tibble(pr_wind_phase_dist)
+
+# plot construction
+g_wind_dist <- pr_wind_phase_dist |> 
+  dplyr::filter(dist_wind_n10 > 0) |> 
+  tidyr::pivot_longer(cols = starts_with("dist_wind_"), 
+                      names_to = "density_turbines", names_prefix = "dist_wind_n", 
+                      values_to = "dist_wind") |> 
+  dplyr::mutate(density_turbines = paste("n =", density_turbines)) |>
+  dplyr::filter(!(density_turbines == "n = 1" & dist_wind == 0)) |> 
+  dplyr::rename(Phase = group) |> 
+  ggplot() +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "gray30") +
+  geom_ribbon(aes(x = dist_wind, ymin = conf.low, ymax = conf.high,
+                  color = Phase, fill = Phase), alpha = 0.25) +
+  geom_line(aes(x = dist_wind, y = predicted, color = Phase), linewidth = 1) +
+  scale_color_manual(values = cols) +
+  scale_fill_manual(values = cols) +
+  facet_wrap(density_turbines ~ facet, nrow = 2) +
+  labs(x = "Distance from wind turbines (km)", 
+       y = "Predicted probability of use") +
+  xlim(0, 10) +
+  ylim(0, 1) +
+  # ylim(-2,2) +
+  theme_bw()
+g_wind_dist
+
+ggsave(filename = "summer_wind_phase_landcc_ytte_dist.png", plot = g_wind_dist, 
+       path = "output/rsf_results/",
+       width = 25, height = 25, units = "cm", dpi = 300)
+
+# zoi_limit <- 0.05; radius <- 10000
+# lambda <- log(1/zoi_limit) / radius
+# pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
+# pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+# 
+# g_wind <- pr_wind_phase_df |>
+#   plot(show_title = FALSE, 
+#        colors = cols) +
+#   # geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#   labs(x = "ZOI of wind turbines (m)",
+#        y = "Predicted probability of use",
+#        colour = "Phase") +
+#   # ylim(0.05, 0.2) +
+#   xlim(NA, 10)
+# g_wind
+# 
+# ggsave(filename = "output/rsf_results//summer_wind_phase_landcc_ytte_dist_negative.png", plot = g_wind,
+#        width = 20, height = 20, units = "cm", dpi = 300)
+# 
+# 
+# # wind dist, phase, and land cover, for places closer to each of the WFs
+# wfs <- levels(data_ready_summer_rsf_2h$wf_name)
+# for(i in wfs) {
+#   
+#   print(i)
+#   pr_wind_phase <- ggpredict(best_fit, terms = c("wind_turbines_cumulative10000", "phase", "landcover_cc_grouped"),
+#                              typical = "median", condition = c(wf_name = i))
+#   #, condition = c(landcover_cc_grouped = "coniferous forests"))
+#   zoi_limit <- 0.05; radius <- 10000
+#   lambda <- log(1/zoi_limit) / radius
+#   pr_wind_phase$x <- -log(pr_wind_phase$x)/lambda/1000
+#   pr_wind_phase_df <- pr_wind_phase[sample.int(nrow(pr_wind_phase), size = 0.1*nrow(pr_wind_phase)),]
+#   
+#   g_wind <- pr_wind_phase_df |>
+#     plot(show_title = FALSE, colors = cols) +
+#     geom_hline(yintercept = 0.5, linetype = 2, color = "grey") +
+#     geom_vline(xintercept = 5, linetype = 2, color = "grey") +
+#     labs(x = "Distance to wind turbines (m)",
+#          y = "Relative probability of use",
+#          colour = "Phase") +
+#     #ylim(0, 1) +
+#     xlim(0, 10)
+#   g_wind
+#   
+#   ggsave(filename = paste0("output/rsf_results//rsf_summer_wind_phase_landcc_grouped_", i, ".png"), plot = g_wind, 
+#          width = 20, height = 20, units = "cm", dpi = 300)
+#   
+# }
 
 # mining
 pr_mining <- ggpredict(best_fit, terms = c("mining_Krist_nearest10000"))

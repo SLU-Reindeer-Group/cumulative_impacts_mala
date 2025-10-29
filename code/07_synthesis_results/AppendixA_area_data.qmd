@@ -1,0 +1,77 @@
+---
+title: "Appendix A. Study area details and environmental data sources"
+author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
+format: 
+  html:
+    self-contained: true
+    toc: true
+    toc-depth: 4 # default is 3
+    toc-title: Contents
+    toc-location: left
+    number-sections: true
+editor: source
+bibliography: references.bib
+---
+  
+```{r setup, warning=FALSE, message=FALSE, echo=FALSE}
+library(readr)
+library(readxl)
+library(dplyr)
+library("DT") # Interactive HTML tables
+library(terra)
+library(sf)
+library(tmap)
+```
+
+
+In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of 
+mine and wind farms on reindeer in the Malå reindeer herding community in Northern Sweden. More specifically, we:
+
+- Detail the definition of the seasons in each year for which we used GPS data;
+- Present and describe the availbility areas in each of the seasons; 
+- Describe all the environmental data used the study, pointing to sources, geographical information, thematic resolution, and details
+on the processing and preparation of the data layers.
+
+# Seasons
+
+Describe here
+
+```{r load_seasons, warning=FALSE, echo=FALSE}
+seasons <- readxl::read_xlsx("details_snow_free_mala_clean.xlsx") 
+```
+
+```{r data_seasons, echo=FALSE}
+#| label: data_seasons
+#| fig-cap: "Table A1. Dates of the calving, Summer, and Autumn seasons in each of the years of reindeer monitoring."
+#|
+
+seasons |> 
+  dplyr::mutate(Calving = paste0(`Start Calving`, " - ", `End Calving`),
+                Summer = paste0(`Start Summer`, " - ", `End Summer`),
+                Autumn = paste0(`Start Autumn`, " - ", `End Autumn`)) |> 
+  dplyr::select(Year, Phase, Calving:Autumn) |> 
+  DT::datatable()
+```
+
+# Availability areas
+
+Describe here, add figure (or figures with the three polygons and the location of the other important things (mine, wind turbine etc))
+
+# Environmental data
+
+All maps were processed in GRASS GIS environment, version 7.8 (REF), in SWEREF99 (EPSG:3006) coordinate reference system.
+
+Add table, explain
+
+```{r load_env, warning=FALSE, echo=FALSE}
+env_data <- readxl::read_xlsx("environmental_data.xlsx") 
+```
+
+```{r data_env, echo=FALSE}
+#| label: data_env
+#| fig-cap: "Table A2. Description of the environmental layers used for estimating reindeer habitat selection and movement patterns.."
+#|
+
+env_data |> 
+  DT::datatable()
+```

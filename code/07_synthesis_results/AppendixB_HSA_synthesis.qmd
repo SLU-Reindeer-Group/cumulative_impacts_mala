@@ -68,14 +68,19 @@ summ_summer <- apply(summ_summer_year, 2, sum)
 
 # autumn
 summ_autumn_year <- data_ready_autumn_rsf_2h |> 
+  dplyr::filter(case_ == TRUE) |> 
   dplyr::group_by(year) |> 
   dplyr::summarize(n = n(),
                    n_ind = length(unique(id)))
 
 summ_autumn <- apply(summ_autumn_year, 2, sum)
+
+# # number of used locations
+# rbind(summ_calving, summ_summer, summ_autumn) |>
+#   colSums()
 ```
 
-GPS data was collected by Sami reindeer herders through GPS collaring female reindeer between 2008 and 2018. No data was collected between 2012 and 2014, the years that followed the construction of the wind farm. Data was collected with a 2 hour fix rate, and failures or gaps were not considered for the analyses, and used to define the separation of the movement tracks into bursts. Data was only included in the analysis if there was at least forty consecutive days of movement data for each individual. Data was manually checked for all reindeer-years so that all positions representing reindeer being herd or GPS position of collars not attached to animals were removed. Furthermore, we used Bjørneraas et al (2010) procedure to remove spikes and outliers, and removed all locations found within known fenced areas and corrals, which are typically used for reindeer handling.
+GPS data was collected by Sami reindeer herders through GPS collaring female reindeer between 2008 and 2018. No data was collected between 2012 and 2014, the years that followed the construction of the wind farms. Data was collected with a 2 hour fix rate, and failures or gaps were not considered for the analyses, and used to define the separation of the movement tracks into bursts. Data was only included in the analysis if there was at least fourteen consecutive days of movement data or 168 locations per for each individual in each season. Data was manually checked for all reindeer-years so that all positions representing reindeer being herd or GPS position of collars not attached to animals were removed. Furthermore, we used Bjørneraas et al (2010) procedure to remove spikes and outliers, and removed all locations found within known fenced areas and corrals, which are typically used for reindeer handling.
 
 The HSA was based on data of `{r} summ_calving[3]` reindeer tracked during calving, `{r} summ_summer[3]` reindeer tracked during summer, and `{r} summ_autumn[3]` reindeer tracked during autumn. Table C1 shows the number of individuals and number of used GPS positions recorded in each year. 
 
@@ -115,7 +120,7 @@ summ_data |>
 
 ## Statistical modeling
 
-We modeled habitat selection using binomial regression following [@fieberg_how_2021]. Used GPS positions were compared to available positions spread randomly throughout the availability area within each season. The area available was different across seasons (see Figs AXXX in Appendix A) and it was defined by the reindeer herding community borders on the North, West, and South, and the fence **HOW TO CALL THIS FENCE?** in the East during calving. In summer and autumn the animals often crossed the fence, so the eastern limits of the availability area were defined by a buffer around the used positions, accounting for the reindeer herding community borders and the main roads. More details on the availability areas are presented in Appendix A. 
+We modeled habitat selection using binomial regression following [@fieberg_how_2021]. The environmental conditions at each used GPS position were compared to 10 available positions spread randomly throughout the availability area within each season. The area available was different across seasons (see Fig. A1 in Appendix A) and it was defined by the reindeer herding community borders on the North, West, and South, and the fence **HOW TO CALL THIS FENCE?** in the East during calving. In summer and autumn the animals often crossed the fence, so the eastern limits of the availability area were defined by a buffer around the used positions, accounting for the reindeer herding community borders and the main roads. More details on the availability areas are presented in Appendix A. 
 
 We ran models using use/availability as a response variable and the effects of wind power, mining, and other infrastructure (private and public roads, power lines, houses, trails) as covariates. We also added other land cover and phenology related variables - elevation, slope, aspect, terrain position index (TPI), and date of the start of the season (SOS) (or end of season, EOS, for autumn). TPI is a measure of variation in the relief of a neighborhood, computed by comparing the elevation of a site with the average elevation on the neighborhood, for a given neighborhood size/scale [@de_reu_application_2013]. Here the TPI was computed using neighborhoods of different sizes (150 m, 250 m, and 510 m) and the best TPI scale was defined through model selection (see below). SOS and EOS are phenological variables based on NDVI that show the time of peak greening and browning of the vegetation in spring and autumn [@kong_phenofit_2022]. Given our questions, our focus was mainly on estimating the impacts of wind power and mining, so the other variables were mainly included to control for their possible, additive effects. All variables that were not in log scale were standardized to mean 0 and variance 1, to facilitate convergence of the model fits.
 

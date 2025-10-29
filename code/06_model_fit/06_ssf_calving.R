@@ -725,7 +725,7 @@ g_wind_const_n1 <- df_all |>
   ylab("log Relative selection strength") +
   # ylab("log(Relative selection strength)") +
   xlim(0, 10) +
-  # ylim(0,3) +
+  ylim(-5,3.5) +
   # ylim(-2,2) +
   theme_bw() +
   theme(legend.position = "none")
@@ -754,7 +754,7 @@ g_wind_const_n10 <- df_all |>
   ylab("log Relative selection strength") +
   # ylab("log(Relative selection strength)") +
   xlim(0, 10) +
-  # ylim(0,3) +
+  ylim(-5,3.5) +
   # ylim(-2,2) +
   theme_bw() +
   theme(legend.position = "none")

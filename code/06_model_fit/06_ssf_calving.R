@@ -1,5 +1,5 @@
 #' ---
-#' title: 'Step selection analysis of Swedish reindeer during calving at local: iSSF at Mala sameby'
+#' title: 'Step selection analysis of Swedish reindeer during calving at local scale: iSSF at Mala sameby'
 #' author: Bernardo Niebuhr
 #' abstract: ""
 #' ---
@@ -43,6 +43,8 @@ install.load::install_load("survival", "amt")
 # vindval data
 load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_ssf.RData")
 # load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_ssf.RData")
+
+colnames(data_ready_calving_ssf_2h)
 
 #------------
 #- Check correlations
@@ -137,7 +139,12 @@ data_ready_calving_ssf_2h <- data_ready_calving_ssf_2h |>
                 wind_turbines_nearest1000_end_operation_scaled = scale(wind_turbines_nearest1000_end_operation),
                 wind_turbines_nearest2500_end_operation_scaled = scale(wind_turbines_nearest2500_end_operation),
                 wind_turbines_nearest5000_end_operation_scaled = scale(wind_turbines_nearest5000_end_operation),
-                wind_turbines_nearest10000_end_operation_scaled = scale(wind_turbines_nearest10000_end_operation)
+                wind_turbines_nearest10000_end_operation_scaled = scale(wind_turbines_nearest10000_end_operation),
+                wind_turbines_nearest1000_cross_construction = ifelse(wind_turbines_nearest_exp_decay1000_cross_construction > 0.05, 1, 0),
+                wind_turbines_nearest1000_cross_operation = ifelse(wind_turbines_nearest_exp_decay1000_cross_operation > 0.05, 1, 0),
+                wind_turbines_nearest500_cross_construction = ifelse(wind_turbines_nearest_exp_decay500_cross_construction > 0.05, 1, 0),
+                wind_turbines_nearest500_cross_operation = ifelse(wind_turbines_nearest_exp_decay500_cross_operation > 0.05, 1, 0),
+                public_road_nearest100_cross = ifelse(public_road_nearest_exp_decay100_cross > 0.05, 1, 0)
   )
 data_ready_calving_ssf_2h$landcover_cc_grouped_end
 data_ready_calving_ssf_2h$tpi_cat_s150m_end <- factor(data_ready_calving_ssf_2h$tpi_cat_s150m_end)
@@ -161,7 +168,6 @@ summary(data_ready_calving_ssf_2h$wind_turbines_cumulative10000_end_construction
 # scale(ndvi) [time integrated ndvi] was included in all models, but was removed afterwards.
 # we noticed the variable did not represent variation in NDVI properly, but was basically
 # representing avoidance of forested areas.
-
 base_formula <- case_ ~ strata(step_id_) + 
   sl_ + log_sl + cos_ta +
   scale(wind_turbines_cumulative100_start_construction):(sl_ + log_sl + cos_ta) +
@@ -194,7 +200,10 @@ base_formula <- case_ ~ strata(step_id_) +
   wind_turbines_cumulative5000_end_construction_scaled +
   wind_turbines_cumulative5000_end_operation_scaled +
   landcover_cc_grouped_end:wind_turbines_cumulative5000_end_construction_scaled +
-  landcover_cc_grouped_end:wind_turbines_cumulative5000_end_operation_scaled
+  landcover_cc_grouped_end:wind_turbines_cumulative5000_end_operation_scaled +
+  public_road_nearest100_cross +
+  wind_turbines_nearest500_cross_construction +
+  wind_turbines_nearest500_cross_operation
 
 # data_ready_calving_ssf_2h <- amt::as_track(data_ready_calving_ssf_2h)
 # sl_distr_params(data_ready_calving_ssf_2h)
@@ -250,7 +259,10 @@ base_formula <- case_ ~ strata(step_id_) +
   wind_turbines_YYY_end_construction_scaled +
   wind_turbines_ZZZ_end_operation_scaled +
   landcover_cc_grouped_end:wind_turbines_YYY_end_construction_scaled +
-  landcover_cc_grouped_end:wind_turbines_ZZZ_end_operation_scaled
+  landcover_cc_grouped_end:wind_turbines_ZZZ_end_operation_scaled +
+  public_road_nearest100_cross +
+  wind_turbines_nearest500_cross_construction +
+  wind_turbines_nearest500_cross_operation
   # + TPI
 
 # values for ZOI radii and metrics, TPI scales, and type of land cover variable
@@ -266,6 +278,11 @@ tpi_scals <- c("tpi_cat_s150m_end", "tpi_cat_s250m_end", "tpi_cat_s510m_end")
 fits <- tibble::tibble(mining = numeric(), wind = character(), 
                        tpi = character(), lc = character(), 
                        aic = numeric(), definition = character())
+
+load(file = "output/ssf_calving_multi_zoi_table_landcover_partial.rda")
+tail(fits)
+counter_start <- nrow(fits)
+# counter_start <- 0
 
 counter <- 1
 for(i in scals) {
@@ -284,29 +301,39 @@ for(i in scals) {
       #                paste0(lc, "*phase*scale(wind_turbines_", j, ")"))
       # form <- update(base_formula, updt)
       
-      updt <- as.character(base_formula) |> 
-        gsub(pattern = "XXX", replacement = i) |> 
-        gsub(pattern = "YYY", replacement = j) |> 
-        gsub(pattern = "ZZZ", replacement = j)
+      # print(paste0("mines = ", i, "; wind = ", j, "; tpi = ", tt, 
+      #              #"; lc = ", lc, 
+      #              " up and running..."))
+      print(counter)
       
-      form <- as.formula(paste(updt[2], updt[1], paste(updt[3], "+ ", tt)))
-      
-      print(paste0("mines = ", i, "; wind = ", j, "; tpi = ", tt, 
-                   #"; lc = ", lc, 
-                   " up and running..."))
-      fit1 <- amt::fit_issf(formula = form,
-                            data = data_ready_calving_ssf_2h, 
-                            model = TRUE)
-      fits[counter,1] <- i
-      fits[counter,2] <- j
-      fits[counter,3] <- tt
-      fits[counter,4] <- "landcover_cc_grouped"
-      fits[counter,5] <- AIC(fit1)
-      fits[counter,6] <- paste(as.character(form)[c(2,1,3)], collapse = " ")
+      if(counter > counter_start) {
+        
+        updt <- as.character(base_formula) |> 
+          gsub(pattern = "XXX", replacement = i) |> 
+          gsub(pattern = "YYY", replacement = j) |> 
+          gsub(pattern = "ZZZ", replacement = j)
+        
+        form <- as.formula(paste(updt[2], updt[1], paste(updt[3], "+ ", tt)))
+        
+        print(paste0("mines = ", i, "; wind = ", j, "; tpi = ", tt, 
+                     #"; lc = ", lc, 
+                     " up and running..."))
+        fit1 <- amt::fit_issf(formula = form,
+                              data = data_ready_calving_ssf_2h, 
+                              model = TRUE)
+        fits[counter,1] <- i
+        fits[counter,2] <- j
+        fits[counter,3] <- tt
+        fits[counter,4] <- "landcover_cc_grouped"
+        fits[counter,5] <- AIC(fit1)
+        fits[counter,6] <- paste(as.character(form)[c(2,1,3)], collapse = " ")
+        
+        save(fits, file = "output/ssf_calving_multi_zoi_table_landcover_partial.rda")
+        
+      } 
       
       counter <- counter+1
       
-      save(fits, file = "output/ssf_calving_multi_zoi_table_landcover_partial.rda")
     }}#}
 }
 
@@ -322,8 +349,8 @@ for(i in scals) {
     dplyr::mutate(dAIC = abs(aic - min(aic))) |>
     dplyr::arrange(dAIC))
 
-#save(tab_models, file = "output/ssf_calving_multi_zoi_table_landcover.rda")
-load("output/ssf_calving_multi_zoi_table_landcover.rda")
+# save(tab_models, file = "output/ssf_calving_multi_zoi_table_landcover_cross.rda")
+load("output/ssf_calving_multi_zoi_table_landcover_cross.rda")
 tab_models
 
 # tab_models |>
@@ -390,7 +417,7 @@ coefs <- broom::tidy(best_fit$model) |>
                 p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)))
 coefs |> 
   mutate_if(is.numeric, round, digits = 3) |> 
-  readr::write_csv(file = "output/ssf_results/ssf_calving_coef_table_.csv")
+  readr::write_csv(file = "output/ssf_results/ssf_calving_coef_table_cross.csv")
 
 # Model validation
 # AUC
@@ -419,7 +446,8 @@ s1 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -428,6 +456,9 @@ s1 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 0,
+  wind_turbines_nearest500_cross_operation = 0,
   step_id = data_ready_calving_ssf_2h$step_id_[1],
   sl_ = 100,
   log_sl = log(100),
@@ -442,7 +473,8 @@ s2 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -451,6 +483,9 @@ s2 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 0,
+  wind_turbines_nearest500_cross_operation = 0,
   step_id = data_ready_calving_ssf_2h$step_id_[1],
   sl_ = 100,
   log_sl = log(100),
@@ -486,7 +521,8 @@ s1 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor(rep(levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)[-1], each = 200), levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)), #factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -495,6 +531,9 @@ s1 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 1,
+  wind_turbines_nearest500_cross_operation = 0,
   step_id = data_ready_calving_ssf_2h$step_id_[2],
   sl_ = 100,
   log_sl = log(100),
@@ -509,7 +548,8 @@ s2 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor("deciduous forests", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -518,6 +558,9 @@ s2 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 0,
+  wind_turbines_nearest500_cross_operation = 0,
   step_id = data_ready_calving_ssf_2h$step_id_[2],
   sl_ = 100,
   log_sl = log(100),
@@ -532,7 +575,8 @@ s3 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor(rep(levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)[-1], each = 200), levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)), #factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -541,6 +585,9 @@ s3 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 0,
+  wind_turbines_nearest500_cross_operation = 1,
   step_id = data_ready_calving_ssf_2h$step_id_[2],
   sl_ = 100,
   log_sl = log(100),
@@ -555,7 +602,8 @@ s4 <- data.frame(
   log_priv_road_dist_end = mean(data_ready_calving_ssf_2h$log_priv_road_dist_end),
   log_public_road_dist_end = mean(data_ready_calving_ssf_2h$log_public_road_dist_end),
   log_house_dist_end = mean(data_ready_calving_ssf_2h$log_house_dist_end),
-  log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  # log_mining_Krist_dist_end = mean(data_ready_calving_ssf_2h$log_mining_Krist_dist_end),
+  mining_Krist_nearest250_end_scaled = mean(data_ready_calving_ssf_2h$mining_Krist_nearest250_end_scaled),
   wf_name_end = factor("jokkmokksliden", levels = levels(data_ready_calving_ssf_2h$wf_name_end)),
   landcover_cc_grouped_end = factor("deciduous forests", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_end)),
   tpi_cat_s150m_end = factor("lower slope", levels = levels(data_ready_calving_ssf_2h$tpi_cat_s150m_end)),
@@ -564,6 +612,9 @@ s4 <- data.frame(
   landcover_cc_grouped_start = factor("open lands", levels = levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)),
   wind_turbines_cumulative5000_start_construction_scaled = 0,
   wind_turbines_cumulative5000_start_operation_scaled = 0,
+  public_road_nearest100_cross = 0,
+  wind_turbines_nearest500_cross_construction = 0,
+  wind_turbines_nearest500_cross_operation = 0,
   step_id = data_ready_calving_ssf_2h$step_id_[2],
   sl_ = 100,
   log_sl = log(100),
@@ -601,7 +652,7 @@ g_wind <- ggplot(df_all, aes(x = zoi_turbines, y = log_rss)) +
   # theme(legend.position = "none")
 g_wind
 
-ggsave(filename = "ssf_calving_wind_density.png", plot = g_wind, 
+ggsave(filename = "ssf_calving_wind_density_cross.png", plot = g_wind, 
        path = "output/ssf_results/",
        width = 25, height = 25, units = "cm", dpi = 300)
 
@@ -697,7 +748,7 @@ g_wind_const <- df_all |>
   theme(legend.position = "none")
 g_wind_const
 
-ggsave(filename = "ssf_calving_wind_const.png", plot = g_wind_const, 
+ggsave(filename = "ssf_calving_wind_const_cross.png", plot = g_wind_const, 
        path = "output/ssf_results/",
        width = 25, height = 25, units = "cm", dpi = 300)
 
@@ -761,11 +812,11 @@ g_wind_const_n10 <- df_all |>
 g_wind_const_n10
 
 # save
-ggsave(filename = "ssf_calving_wind_const_n1.png", plot = g_wind_const_n1, 
+ggsave(filename = "ssf_calving_wind_const_n1_cross.png", plot = g_wind_const_n1, 
        path = "output/ssf_results/",
        width = 25, height = 12, units = "cm", dpi = 300)
 
-ggsave(filename = "ssf_calving_wind_const_n10.png", plot = g_wind_const_n10, 
+ggsave(filename = "ssf_calving_wind_const_n10_cross.png", plot = g_wind_const_n10, 
        path = "output/ssf_results/",
        width = 25, height = 12, units = "cm", dpi = 300)
 
@@ -799,7 +850,7 @@ g_wind_op <- df_all |>
   theme(legend.position = "none")
 g_wind_op
 
-ggsave(filename = "ssf_calving_wind_operation.png", plot = g_wind_op, 
+ggsave(filename = "ssf_calving_wind_operation_cross.png", plot = g_wind_op, 
        path = "output/ssf_results/",
        width = 25, height = 25, units = "cm", dpi = 300)
 
@@ -834,7 +885,7 @@ g_wind_n10 <- df_all |>
   theme(legend.position = "none")
 g_wind_n10
 
-ggsave(filename = "ssf_calving_wind_n10_const_op.png", plot = g_wind_n10, 
+ggsave(filename = "ssf_calving_wind_n10_const_op_cross.png", plot = g_wind_n10, 
        path = "output/ssf_results/",
        width = 25, height = 25, units = "cm", dpi = 300)
 
@@ -928,6 +979,10 @@ summary(best_fit)
 # levels(data_ready_calving_ssf_2h$landcover_cc_grouped_start)
 data_ready_calving_ssf_2h$wind_turbines_cumulative5000_start_construction |> range()
 data_ready_calving_ssf_2h$wind_turbines_cumulative5000_start_construction_scaled |> range()
+
+zoi_limit <- 0.05; radius <- 5000
+# lambda1 <- log(1/zoi_limit) / radius1
+lambda <- log(1/zoi_limit) / radius
 
 mm <- attr(data_ready_calving_ssf_2h$wind_turbines_cumulative5000_start_construction_scaled, "scaled:center")
 ss <- attr(data_ready_calving_ssf_2h$wind_turbines_cumulative5000_start_construction_scaled, "scaled:scale")

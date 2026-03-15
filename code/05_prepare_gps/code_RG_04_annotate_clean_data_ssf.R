@@ -1478,6 +1478,130 @@ table(check$phase, check$wind_turbines_cumulative2500_start_operation)
 # save
 save(data_ready_calving_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_ssf.RData")
 
+#--------------------------
+# addition
+
+# Annotate crossing of infrastructure - public roads and wind power
+# load(file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_ssf.RData")
+# class(data_ready_calving_ssf_2h)
+
+head(data_ready_calving_ssf_2h)
+colnames(data_ready_calving_ssf_2h)
+
+library(DBI)
+library(duckdb)
+library(JuliaConnectoR)
+
+# converting points to linestrings/steps in duckdb
+data_ready_calving_ssf_2h$row_id <- seq_len(nrow(data_ready_calving_ssf_2h))
+
+con <- dbConnect(duckdb())
+
+dbExecute(con, "INSTALL spatial;")
+dbExecute(con, "LOAD spatial;")
+
+dbWriteTable(con, "pts", data_ready_calving_ssf_2h, overwrite = TRUE)
+
+res <- dbGetQuery(con, "
+  SELECT
+    row_id,
+    ST_AsWKB(
+      ST_MakeLine(
+        ST_Point(x1_, y1_),
+        ST_Point(x2_, y2_)
+      )
+    ) AS geom_wkb
+  FROM pts
+")
+
+res$geom <- st_as_sfc(res$geom_wkb, crs = crs_to_use)
+lines_sf <- st_sf(res[, c("row_id", "geom")])
+
+# write lines to gpkg file
+step_file <- "/data/scratch/tmp_bernardo/steps_calving.gpkg"
+sf::write_sf(lines_sf, step_file, delete_dsn = TRUE)
+
+# select interesting maps (loaded up there in the script)
+# and get their source paths
+library(tictoc)
+tic()
+names(maps)
+select_maps <- c("wind_turbines_bin_zoi_nearest", "public_road_bin_zoi_nearest") 
+rast_sources <- terra::sources(maps[[grep(paste0(select_maps, collapse = "|"), 
+                                          names(maps))]])
+  
+# extract sum of the values along the steps in Julia and return it as a matrix in R
+tic()
+res <- JuliaConnectoR::juliaLet("
+        using Rasters
+        import GeoDataFrames as GDF
+        using Statistics
+        using DataFrames
+
+        steps = GDF.read(step_file)
+        rasts = RasterStack(sources)
+        f(x) = sum(x)
+        @time means = zonal(f, rasts; of=steps, threaded=true)
+        
+        n = length(means)
+        k = length(first(means))
+
+        means2 = Matrix{Float64}(undef, n, k)
+        
+        for i in eachindex(means)
+            vals = Tuple(means[i])
+            @inbounds for j in 1:k
+                means2[i, j] = Float64(vals[j])
+            end
+        end
+        means2
+        #means2 = reinterpret(reshape, Float64, mapreduce(collect, hcat, means))
+        # means2 = reduce(hcat, Float64.(collect(m)) for m in means)
+        # means2 = permutedims(reduce(hcat, Float64.(collect(m)) for m in means))
+        # nothing
+      ", step_file = step_file, sources = rast_sources)
+toc()
+
+# set column names
+res2 <- res
+colnames(res2) <- grep(paste0(select_maps, collapse = "|"), names(maps), value = TRUE) |> 
+  sub(pattern = "bin_zoi_", replacement = "") |> 
+  paste0("_cross")
+res2 <- as.data.frame(res2)
+
+# adding construction and operation
+cols_wind <- grep("wind", colnames(res2), value = TRUE) |> 
+  grep(pattern = "7500_interp", value = TRUE, invert = TRUE) |> 
+  grep(pattern = "cumulative|nearest", value = TRUE)
+grep("phase", colnames(data_ready_calving_ssf_2h), value = TRUE)
+
+cc <- 1
+for(cc in seq_along(cols_wind)) {
+  
+  print(cc)
+  coll <- cols_wind[cc]
+  
+  # during contruction
+  new_coll <- paste0(coll, "_construction")
+  res2[[new_coll]] <- ifelse(data_ready_calving_ssf_2h$phase == "Construction",
+                            res2[[coll]],
+                            0)
+  # operation
+  new_coll2 <- paste0(coll, "_operation")
+  res2[[new_coll2]] <- ifelse(data_ready_calving_ssf_2h$phase == "Operation", 
+                              res2[[coll]],
+                              0)
+  
+}
+
+res2 <- res2[,!(grepl("wind", colnames(res2)) & grepl(pattern = "cross$", colnames(res2)))]
+colnames(res2)
+
+data_ready_calving_ssf_2h <- cbind(data_ready_calving_ssf_2h, res2)
+
+# save again
+save(data_ready_calving_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_ssf.RData")
+
 #-----------
 # Summer
 
@@ -1914,6 +2038,132 @@ table(check$phase, check$wind_turbines_cumulative2500_start_operation)
 # save
 save(data_ready_summer_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_ssf.RData")
 # load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_ssf.RData")
+
+
+#----------
+# addition
+
+# Annotate crossing of infrastructure - public roads and wind power
+# load(file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_ssf.RData")
+# class(data_ready_summer_ssf_2h)
+
+head(data_ready_summer_ssf_2h)
+colnames(data_ready_summer_ssf_2h)
+
+library(DBI)
+library(duckdb)
+library(JuliaConnectoR)
+
+# converting points to linestrings/steps in duckdb
+data_ready_summer_ssf_2h$row_id <- seq_len(nrow(data_ready_summer_ssf_2h))
+
+con <- dbConnect(duckdb())
+
+dbExecute(con, "INSTALL spatial;")
+dbExecute(con, "LOAD spatial;")
+
+dbWriteTable(con, "pts", data_ready_summer_ssf_2h, overwrite = TRUE)
+
+res <- dbGetQuery(con, "
+  SELECT
+    row_id,
+    ST_AsWKB(
+      ST_MakeLine(
+        ST_Point(x1_, y1_),
+        ST_Point(x2_, y2_)
+      )
+    ) AS geom_wkb
+  FROM pts
+")
+
+res$geom <- st_as_sfc(res$geom_wkb, crs = crs_to_use)
+lines_sf <- st_sf(res[, c("row_id", "geom")])
+
+# write lines to gpkg file
+step_file <- "/data/scratch/tmp_bernardo/steps_summer.gpkg"
+sf::write_sf(lines_sf, step_file, delete_dsn = TRUE)
+
+# select interesting maps (loaded up there in the script)
+# and get their source paths
+library(tictoc)
+tic()
+names(maps)
+select_maps <- c("wind_turbines_bin_zoi_nearest", "public_road_bin_zoi_nearest") 
+rast_sources <- terra::sources(maps[[grep(paste0(select_maps, collapse = "|"), 
+                                          names(maps))]])
+
+# extract sum of the values along the steps in Julia and return it as a matrix in R
+tic()
+res <- JuliaConnectoR::juliaLet("
+        using Rasters
+        import GeoDataFrames as GDF
+        using Statistics
+        using DataFrames
+
+        steps = GDF.read(step_file)
+        rasts = RasterStack(sources)
+        f(x) = sum(x)
+        @time means = zonal(f, rasts; of=steps, threaded=true)
+        
+        n = length(means)
+        k = length(first(means))
+
+        means2 = Matrix{Float64}(undef, n, k)
+        
+        for i in eachindex(means)
+            vals = Tuple(means[i])
+            @inbounds for j in 1:k
+                means2[i, j] = Float64(vals[j])
+            end
+        end
+        means2
+        #means2 = reinterpret(reshape, Float64, mapreduce(collect, hcat, means))
+        # means2 = reduce(hcat, Float64.(collect(m)) for m in means)
+        # means2 = permutedims(reduce(hcat, Float64.(collect(m)) for m in means))
+        # nothing
+      ", step_file = step_file, sources = rast_sources)
+toc()
+
+# set column names
+res2 <- res
+colnames(res2) <- grep(paste0(select_maps, collapse = "|"), names(maps), value = TRUE) |> 
+  sub(pattern = "bin_zoi_", replacement = "") |> 
+  paste0("_cross")
+res2 <- as.data.frame(res2)
+
+# adding construction and operation
+cols_wind <- grep("wind", colnames(res2), value = TRUE) |> 
+  grep(pattern = "7500_interp", value = TRUE, invert = TRUE) |> 
+  grep(pattern = "cumulative|nearest", value = TRUE)
+grep("phase", colnames(data_ready_summer_ssf_2h), value = TRUE)
+
+cc <- 1
+for(cc in seq_along(cols_wind)) {
+  
+  print(cc)
+  coll <- cols_wind[cc]
+  
+  # during contruction
+  new_coll <- paste0(coll, "_construction")
+  res2[[new_coll]] <- ifelse(data_ready_summer_ssf_2h$phase == "Construction",
+                             res2[[coll]],
+                             0)
+  # operation
+  new_coll2 <- paste0(coll, "_operation")
+  res2[[new_coll2]] <- ifelse(data_ready_summer_ssf_2h$phase == "Operation", 
+                              res2[[coll]],
+                              0)
+  
+}
+
+res2 <- res2[,!(grepl("wind", colnames(res2)) & grepl(pattern = "cross$", colnames(res2)))]
+colnames(res2)
+
+data_ready_summer_ssf_2h <- cbind(data_ready_summer_ssf_2h, res2)
+
+# save again
+save(data_ready_summer_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_summer_ready_2h_ssf_cross.RData")
+
 
 #-----------
 # Autumn
@@ -2353,6 +2603,133 @@ table(check$phase, check$wind_turbines_cumulative2500_start_operation)
 save(data_ready_autumn_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_ssf.RData")
 
 # load("data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_ssf.RData")
+
+#----------
+# addition
+
+# Annotate crossing of infrastructure - public roads and wind power
+# load(file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_ssf.RData")
+# class(data_ready_autumn_ssf_2h)
+
+head(data_ready_autumn_ssf_2h)
+colnames(data_ready_autumn_ssf_2h)
+
+library(DBI)
+library(duckdb)
+library(JuliaConnectoR)
+
+# converting points to linestrings/steps in duckdb
+data_ready_autumn_ssf_2h$row_id <- seq_len(nrow(data_ready_autumn_ssf_2h))
+
+con <- dbConnect(duckdb())
+
+dbExecute(con, "INSTALL spatial;")
+dbExecute(con, "LOAD spatial;")
+
+dbWriteTable(con, "pts", data_ready_autumn_ssf_2h, overwrite = TRUE)
+
+res <- dbGetQuery(con, "
+  SELECT
+    row_id,
+    ST_AsWKB(
+      ST_MakeLine(
+        ST_Point(x1_, y1_),
+        ST_Point(x2_, y2_)
+      )
+    ) AS geom_wkb
+  FROM pts
+")
+
+res$geom <- st_as_sfc(res$geom_wkb, crs = crs_to_use)
+lines_sf <- st_sf(res[, c("row_id", "geom")])
+
+# plot(lines_sf[1])
+
+# write lines to gpkg file
+step_file <- "/data/scratch/tmp_bernardo/steps_autumn.gpkg"
+sf::write_sf(lines_sf, step_file, delete_dsn = TRUE)
+
+# select interesting maps (loaded up there in the script)
+# and get their source paths
+library(tictoc)
+tic()
+names(maps)
+select_maps <- c("wind_turbines_bin_zoi_nearest", "public_road_bin_zoi_nearest") 
+rast_sources <- terra::sources(maps[[grep(paste0(select_maps, collapse = "|"), 
+                                          names(maps))]])
+
+# extract sum of the values along the steps in Julia and return it as a matrix in R
+tic()
+res <- JuliaConnectoR::juliaLet("
+        using Rasters
+        import GeoDataFrames as GDF
+        using Statistics
+        using DataFrames
+
+        steps = GDF.read(step_file)
+        rasts = RasterStack(sources)
+        f(x) = sum(x)
+        @time means = zonal(f, rasts; of=steps, threaded=true)
+        
+        n = length(means)
+        k = length(first(means))
+
+        means2 = Matrix{Float64}(undef, n, k)
+        
+        for i in eachindex(means)
+            vals = Tuple(means[i])
+            @inbounds for j in 1:k
+                means2[i, j] = Float64(vals[j])
+            end
+        end
+        means2
+        #means2 = reinterpret(reshape, Float64, mapreduce(collect, hcat, means))
+        # means2 = reduce(hcat, Float64.(collect(m)) for m in means)
+        # means2 = permutedims(reduce(hcat, Float64.(collect(m)) for m in means))
+        # nothing
+      ", step_file = step_file, sources = rast_sources)
+toc()
+
+# set column names
+res2 <- res
+colnames(res2) <- grep(paste0(select_maps, collapse = "|"), names(maps), value = TRUE) |> 
+  sub(pattern = "bin_zoi_", replacement = "") |> 
+  paste0("_cross")
+res2 <- as.data.frame(res2)
+
+# adding construction and operation
+cols_wind <- grep("wind", colnames(res2), value = TRUE) |> 
+  grep(pattern = "7500_interp", value = TRUE, invert = TRUE) |> 
+  grep(pattern = "cumulative|nearest", value = TRUE)
+grep("phase", colnames(data_ready_autumn_ssf_2h), value = TRUE)
+
+cc <- 1
+for(cc in seq_along(cols_wind)) {
+  
+  print(cc)
+  coll <- cols_wind[cc]
+  
+  # during contruction
+  new_coll <- paste0(coll, "_construction")
+  res2[[new_coll]] <- ifelse(data_ready_autumn_ssf_2h$phase == "Construction",
+                             res2[[coll]],
+                             0)
+  # operation
+  new_coll2 <- paste0(coll, "_operation")
+  res2[[new_coll2]] <- ifelse(data_ready_autumn_ssf_2h$phase == "Operation", 
+                              res2[[coll]],
+                              0)
+  
+}
+
+res2 <- res2[,!(grepl("wind", colnames(res2)) & grepl(pattern = "cross$", colnames(res2)))]
+colnames(res2)
+
+data_ready_autumn_ssf_2h <- cbind(data_ready_autumn_ssf_2h, res2)
+
+# save again
+save(data_ready_autumn_ssf_2h, file = "data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_ssf_cross.RData")
+
 
 #-------------------------
 # re-check number of points and monitoring of individuals per year and season

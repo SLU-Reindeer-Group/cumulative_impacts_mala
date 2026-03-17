@@ -1,5 +1,5 @@
 ---
-title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: selection for grazing areas and movement at local scale (integrated step selection analysis)"
+title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: habitat selection and movement at local scale (integrated step selection analysis, iSSA)"
 author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Per Sandström, Anna Skarin
 format: 
   html:
@@ -22,26 +22,16 @@ library(sf)
 library(tmap)
 ```
 
-Here we describe the data and the results of the local assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of a integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at local scale and on movement parameters. We describe:
+Here we provide supplementary information regarding the local assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at local scale and on movement parameters. We present, for each season:
 
 - the reindeer GPS data used for the analyses;
-- how the analysis was set up; 
-- the results of the iSSA models.
+- the setup of the iSSA models;
+- the best-ranged iSSA models;
+- the model selection tables;
+- the tables of coefficients;
+- figures illustrating the impacts of mining and wind farms.
 
-# Goals of the analysis
-
-The main question driving the iSSA analyses is: how is the selection of grazing sites by reindeer across seasons affected by wind power, mining, and other human infrastructure and activity, at a local scale? And how are movement parameters (movement rates and directionality) affected by the presence of wind turbines, during both construction and operation phases of the wind farms?
-
-The specific questions are:
-
--   Are there cumulative impacts of multiple disturbance of the same type, e.g. multiple turbines or multiple wind parks? In other words, is there evidence of the impact of the density of wind turbines instead of only the nearest wind turibine?
--   Are there cumulative impacts of different types of disturbance, e.g. both wind power and mining?
--   What is the zone of influence of the impacts, i.e. up to which distance from disturbance is reindeer behavior altered?
--   How does the impacts change across seasons - calving, summer, and autumn?
-
-# Methods
-
-## Data
+# Table C1: GPS data used in the iSSA analysis
 
 ```{r load_data, warning=FALSE, echo=FALSE}
 load("../../data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_ssf.RData")
@@ -80,13 +70,10 @@ summ_autumn <- apply(summ_autumn_year, 2, sum)
 #   colSums()
 ```
 
-GPS data was collected by Sami reindeer herders through GPS collaring female reindeer between 2008 and 2018. No data was collected between 2012 and 2014, the years that followed the construction of the wind farms. Data was collected with a 2 hour fix rate, and failures or gaps were not considered for the analyses, and used to define the separation of the movement tracks into bursts. Data was only included in the analysis if there was at least fourteen consecutive days of movement data or 168 locations per for each individual in each season. Data was manually checked for all reindeer-years so that all positions representing reindeer being herd or GPS position of collars not attached to animals were removed. Furthermore, we used Bjørneraas et al (2010) procedure to remove spikes and outliers, and removed all locations found within known fenced areas and corrals, which are typically used for reindeer handling.
-
-The iSSA was based on data of `{r} summ_calving[3]` reindeer tracked during calving, `{r} summ_summer[3]` reindeer tracked during summer, and `{r} summ_autumn[3]` reindeer tracked during autumn. Table C1 shows the number of individuals and number of used GPS positions recorded in each year.
 
 ```{r data_summary_year, echo=FALSE}
 #| label: data_summary_year
-#| fig-cap: "Table C1. Number of reindeer monitored (number of GPS positions recorded, in parenthesis) in each year and season."
+#| fig-cap: "Table C1. Number of reindeer monitored (number of GPS positions recorded, in parenthesis) in each year and season, used for the integrated step selection analysis. The numbers are sometimes lower than those used in the regional-scale habitat selection analysis."
 #| 
 summ_data <- summ_calving_year |>
   dplyr::mutate(Phase = c(rep("Before construction", 2),
@@ -118,15 +105,9 @@ summ_data |>
   DT::datatable()
 ```
 
-## Statistical modeling
+# Text C1: Statistical modeling of the iSSA
 
-To assess the impact of mining, wind turbines, and other infrastructure on reindeer habitat selection at local scale and reindeer movement, we performed integrated step selection analyses [iSSA; @avgar_integrated_2016]. iSSA is designed to quantify simultaneously  the effects of the covariates on habitat selection and movement, while controlling for each other's mutual influence. In iSSA, the unit of analysis is the step or displacement made by reindeer between subsequent positions - here, 2 h from each other. Similarly to habitat selection analyses, the data is put into a use-availability design. For each used step, we sampled 10 random steps starting in the same position. Step length and angle for the random steps were drawn from a Gamma distribution and a von Mises distribution fitted to the step lengths and turning angles for each individual, respectively. Random steps leaving the limits of the availability area in each season were excluded and redrawn. For each step, we extracted the environmental covariates at the end point of steps to assess habitat selection, and at the starting point of steps to assess effects on movement parameters.
-
-We prepared the data and performed the iSSA using the tools from the `amt` package in R [@signer_animal_2019] and followed the interpretation of parameters according to Fieberg et al. [-@fieberg_how_2021]. Models were fitted using conditional logistic regression through the function `amt::issf()`. They considered  use/availability as a response variable, the step id as the strata, and the effects of wind power, mining, and other infrastructure (private and public roads, power lines, houses, trails) as covariates. We also added other land cover and phenology related variables - elevation, slope, aspect, terrain position index (TPI), and date of the start of the season (SOS) (or end of season, EOS, for autumn). TPI is a measure of variation in the relief of a neighborhood, computed by comparing the elevation of a site with the average elevation on the neighborhood, for a given neighborhood size/scale [@de_reu_application_2013]. Here the TPI was computed using neighborhoods of different sizes (150 m, 250 m, and 510 m) and the best TPI scale was defined through model selection (see below). SOS and EOS are phenological variables based on NDVI that show the time of peak greening and browning of the vegetation in spring and autumn [@kong_phenofit_2022]. Given our questions, our focus was mainly on estimating the impacts of wind power and mining, so the other variables were mainly included to control for their possible, additive effects. All variables that were not in log scale were standardized to mean 0 and variance 1, to facilitate convergence of the model fits.
-
-We assessed if and how the impacts of wind power and mining accumulated using the approach from Niebuhr et al. [-@niebuhr_estimating_2023]. To represent the spatial influence of wind power and mining, we computed zones of influence (ZOI) that decayed exponentially from the disturbance source and vanished at varying distances, from 100 m to 10 km. For wind power, we computed both the density of wind turbines (representing the cumulative impact of multiple turbines) and the ZOI of the nearest feature (see the main text for details); for mining we only considered the ZOI of the nearest mine, since there is only one main mining site in the study area. For simplicity, the influence of all other infrastructure types was modeled using the log-distance to the nearest feature. To evaluate the impact of wind farms in a before-after setup, comparing the movement behavior of reindeer before, during, and after the construction of the wind farms, we created two variables to represent the influence of wind farms: `wind_ZOI_construction` and `wind_ZOI_operation`. Each of them assumed the value of the ZOI only during the construction and operation phases, respectively, and were zero otherwise. This means that they represented the effect of the wind turbines in the different phases, compared to the period before the construction, when the wind turbines were not present. 
-
-The overall model structure we fitted was the following:
+As described in the main text, the small-scale habitat selection analysis followed a iSSA. The overall model structure we fitted was the following:
 
 ```{r}
 base_formula <- case_ ~ strata(step_id_) +
@@ -134,48 +115,69 @@ base_formula <- case_ ~ strata(step_id_) +
   sl_ + log_sl + cos_ta +
   wind_turbines_YYY_start_construction_scaled:(sl_ + log_sl + cos_ta) +
   wind_turbines_ZZZ_start_operation_scaled:(sl_ + log_sl + cos_ta) +
-  landcover_cc_grouped_start:(sl_ + log_sl + cos_ta) +
+  landcover_start:(sl_ + log_sl + cos_ta) +
   # habitat selection
   dem_end_scaled + I(dem_end_scaled^2) + slope_end_scaled +
   sos_end_scaled +
   log_power_lines_dist_end + log_priv_road_dist_end + log_public_road_dist_end +
   log_house_dist_end + 
-  landcover_cc_grouped_end +
+  landcover_end +
   # minig habitat selection
   mining_Krist_nearestXXX_end_scaled + 
   # wind habitat selection
   wf_name_end +
   wind_turbines_YYY_end_construction_scaled +
   wind_turbines_ZZZ_end_operation_scaled +
-  landcover_cc_grouped_end:wind_turbines_YYY_end_construction_scaled +
-  landcover_cc_grouped_end:wind_turbines_ZZZ_end_operation_scaled +
+  landcover_end:wind_turbines_YYY_end_construction_scaled +
+  landcover_end:wind_turbines_ZZZ_end_operation_scaled +
   # tpi habitat selection
   tpi_scale_TTT
 ```
 
-where `case_` is our response variable, `sl_`, `log_sl` and `cos_ta` are the movement parameters (step length, log(step length), and cosine of the turning angle, respectively). This structure contains the movement parameters, including the effects of land cover and wind turbines; habitat selection considering the effects of wind turbines in each phase (construction, operation) in interaction with land cover; and main effects of other infrastructure and landscape variables. The terms `start` and `end` refer to variables extracted at the start or end points of a step; `dem` refers to elevation, and `wf_name` refers to the name of the closest wind farm to each point, added as a fixed effect to control for differential effects close to the Åmliden wind park, which lies along a large fenced area.
+where:
 
-The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection and movement, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI. Models were compared through the Akaike information criterion (AIC), and the most parsimonious model was selected as the one with smaller AIC [@burnham_model_2002].
+- the terms `start`, `end`, and `cross` refer to variables extracted at the start or end points of a step, or along a step. Variables representing habitat selection were selected at the end points of steps, and variables in interaction with movement parameters were extracted at the starting point of steps. Variables with `cross` represented whether an infrastructure was crossed or not along a step and are used to estimate the barrier effect of that infrastructure type;
+- terms with `scaled` were scaled to mean = 0 and standard deviation = 1;
+- `case_`: our response variable (0/1); 
+- `dem`: elevation, we include a linear and a quadratic term; 
+- `slope`: slope;
+- `cos_aspect`: cosine of the aspect; 
+- `tpi_scale_TTT`: topographic position index (TPI) computed at a certain scale, classified in 6 levels: flat (reference level), lower slope, medium slope, upper slope, ridge, valley;
+- `sos`: start of season (used for calving and summer), replaced by `eos`, end of season, for autumn;
+- `wf_name`: name of the wind farm closest to each point, with four categories, added as a fixed effect to control for differential effects close to the Åmliden wind park, which lies along a large fenced area; 
+- `landcover`: land cover, with 5 categories: deciduous forest (reference category), coniferous forest, open areas, mires, and anthropogenic areas;
+- `log_public_road_dist`, `log_priv_road_dist`, `log_house_dist`, `log_power_lines_dist`: logarithm of the distance to the nearest infrastructure for public roads, private roads, houses, and power lines; 
+- `mining_Krist_nearestXXX`: ZOI (exponential decay distance) of the mine, computed considering a certain ZOI radius; 
+- `sl_`, `log_sl` and `cos_ta`: movement parameters (step length, log(step length), and cosine of the turning angle, respectively). 
+- `wind_turbines_YYY_end_construction` and `wind_turbines_YYY_end_operation`: variables representing the ZOI of wind turbines. These variables assume a value equal to the wind turbine influence (density or nearest, with a corresponding ZOI radius) at the construction and operation phases, respectively, and were zero for other development phases;
+- `public_road_nearest100_cross`: binary variable (0/1) representing whether a certain step crossed or not a public road;
+- `wind_turbines_nearest500_cross_construction` and `wind_turbines_nearest500_cross_operation`: binary variables (0/1) representing whether a certain step crossed or not a buffer of 500 m around any wind turbines, during construction and operation.
 
-To interpret the results, we first checked the structure of the best ranking models (through the AIC and their difference; we considered models different if $\Delta AIC$ > 2; Burnham and Anderson 2002) and compared how they differed qualitatively. Second, we evaluated the coefficients of the best ranked model for each season. Third, for habitat selection, we plotted the relative selection strength [RSS; @avgar_relative_2017] (or the log (RSS)) for wind turbines and land cover, as well as for mining. Finally, for movement patterns, we plotted the differences in movement rates and turning angles for movements close (distance = 0) and far (distance = 1 and 5 km) from the wind turbines, in each phase (construction/operation). We only plotted results when there was a significant effect.
+The model structure contains the movement parameters, including its interaction with the effects of land cover and wind turbines; habitat selection considering the effects of wind turbines in each phase (construction, operation) in interaction with land cover; and main effects of other infrastructure and landscape variables. 
 
-# Results
+The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection and movement, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
 
-## Model selection
+- Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
+- Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
+- TPI: 125 m, 250 m, 510 m.
+
+# Text C2: Best-ranked integrated step-selection models
+
+This is the structure of the best-ranked iSSA model selected for each season. 
 
 ```{r, echo=FALSE, warning=FALSE}
 # calving
-load("../../output/ssf_calving_multi_zoi_table_landcover.rda")
+load("../../output/ssf_calving_multi_zoi_table_landcover_cross.rda")
 tab_models_calving <- tab_models
 form_calving <- tab_models_calving$definition[1] |> 
   gsub(pattern = "\n   ", replacement = "")
 # summer
-load("../../output/ssf_summer_multi_zoi_table_landcover.rda")
+load("../../output/ssf_summer_multi_zoi_table_landcover_cross.rda")
 tab_models_summer <- tab_models
-form_summer <- tab_models_summer$definition[1] |> 
+form_summer <- tab_models_summer$definition[3] |> # here we use 3 which is the most conservative
   gsub(pattern = "\n   ", replacement = "")
 # autumn
-load("../../output/ssf_autumn_multi_zoi_table_landcover.rda")
+load("../../output/ssf_autumn_multi_zoi_table_landcover_cross.rda")
 tab_models_autumn <- tab_models
 form_autumn <- tab_models_autumn$definition[1] |> 
   gsub(pattern = "\n   ", replacement = "")
@@ -183,28 +185,26 @@ form_autumn <- tab_models_autumn$definition[1] |>
 
 Summary of best ranked models:
 
--   **Calving. Cumulative impact of wind turbines, ZOI radius = 5 km; log-distance effect of the mine:** \
+-   **Calving. Cumulative impact of wind turbines, ZOI radius = 5 km; no significant effect of the mine:** \
     `{r} paste(form_calving)`
 
 -   **Summer. ZOI of the nearest wind turbine, radius = 5 km; ZOI of the mine with radius 10 km:**\
     `{r} paste(form_summer)`
 
--   **Autumn. Cumulative ZOI of wind turbines, radius = 10km; negligible effect of the mine:** \
+-   **Autumn. Cumulative ZOI of wind turbines, radius = 10km; no significant effect of the mine:** \
     `{r} paste(form_autumn)`
 
-### Calving
-
-Table C2 shows the ranking of most parsimonious model for iSSA
-during calving. The best model for calving included the additive effect of the log-distance to the mine and the cumulative zone of influence wind turbines at 5 km radius (Table C2). 
-The six models following in the ranking all give support to the a cumulative effect of wind turbines at 5 km and a TPI of 150 m, but the ZOI of the mine for these models is vary variable, from 250 m to 10km. This supports the expectation of a cumulative impact of wind turbines on habitat selection and movement, but points to limited impact of the mine on habitat selection at local scale.
+# Table C2: Model selection table in calving
 
 ```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_calving
-#| fig-cap: "Table C2. Table of model selection for the iSSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the terrain position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. Variables with 'Log' correspond to the log-distance to the nearest feature for that variable. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
+#| fig-cap: "Table C2. Table of model selection for the iSSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
 
-aic_calving <- readr::read_csv("../../output/ssf_results/ssf_calving_AIC_table_complete.csv")
+# aic_calving <- readr::read_csv("../../output/ssf_results/ssf_calving_AIC_table_complete.csv")
+aic_calving <- tab_models_calving
 
 aic_calving |> 
+  # dplyr::slice(-grep("log", mining)) |> 
   dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi)) |> 
@@ -218,18 +218,17 @@ aic_calving |>
   DT::datatable()
 ```
 
-### Summer
-
-Table C3 shows the ranking of most parsimonious model for iSSA during summer. The best model for summer included the additive effect of the ZOI to the mine with 10 km radius and ZOI of the nearest wind turbine at 5 km radius (Table C3). However, other models with ZOI of 5 km for the mine and 10 km for wind turbines are equally plausible (dAIC < 2). To be conservative and not assume a too large zone of influence, we consider for the results the model with ZOI of mine with radius 5 km, and an additive effect of the nearest wind turbine at 5 km.  
-This result refutes the expectation of cumulative impact of the turbines, but supports the expectation of an additive impact of both mining and wind farms at large scales (5 km) on local habitat selection and movement.
+# Table C3: Model selection table in summer
 
 ```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_summer
-#| fig-cap: "Table C3. Table of model selection for the iSSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the terrain position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. Variables with 'Log' correspond to the log-distance to the nearest feature for that variable. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
+#| fig-cap: "Table C3. Table of model selection for the iSSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine. Here, we selected model ranked number 3 as the most parsimonious, because delta AIC < 2 in relation to the best ranked model and we chose to be more conservative, i.e. to select the smallest ZOI radii."
 
-aic_summer <- readr::read_csv("../../output/ssf_results/ssf_summer_AIC_table_complete.csv")
+# aic_summer <- readr::read_csv("../../output/ssf_results/ssf_summer_AIC_table_complete.csv")
+aic_summer <- tab_models_summer
 
 aic_summer |> 
+  # dplyr::slice(-grep("log", mining)) |> 
   dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi),
@@ -244,17 +243,17 @@ aic_summer |>
   DT::datatable()
 ```
 
-### Autumn
-
-Table C4 shows the ranking of most parsimonious model for iSSA during autumn. The best model for autumn included the additive effect of the log-distance to the mine and the cumulative ZOI of wind turbines with 10 km radius (Table C4). All the best ranked models (dAIC < 2) present the cumulative ZOI of wind turbines with 10 km and TPI at 510 m, giving evidence of a large-scale, cumulative impact of wind turbines on local habitat selection and movement in autumn. In contrast, the same models present widely varying ZOI radius for the mine, pointing to no effect of the mine on local habitat selection in autumn.
+# Table C4: Model selection table in calving
 
 ```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_autumn
-#| fig-cap: "Table C4. Table of model selection for the iSSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the terrain position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. Variables with 'Log' correspond to the log-distance to the nearest feature for that variable. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
+#| fig-cap: "Table C4. Table of model selection for the iSSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
 
-aic_autumn <- readr::read_csv("../../output/ssf_results/ssf_autumn_AIC_table_complete.csv")
+# aic_autumn <- readr::read_csv("../../output/ssf_results/ssf_autumn_AIC_table_complete.csv")
+aic_autumn <- tab_models_autumn
 
 aic_autumn |> 
+  dplyr::slice(-grep("log", mining)) |> 
   dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi),
@@ -269,26 +268,25 @@ aic_autumn |>
   DT::datatable()
 ```
 
-## Disturbance effects on step selection
+# Text C2: Disturbance effects on step selection
 
-Here we present the coefficients of the iSSA models on the habitat selection. Even though all results come
-from the same models, we split the way we present the parts of the resulting model, to ease
+Here we present the coefficients of the iSSA models on habitat selection at local scale. Even though all results come from the same models, we split the way we present the parts of the resulting model, to ease
 its interpretation. In this section we restrict ourselves on
 presenting the coefficients of all infrastructure and landscape covariates, without going into 
 details regarding the impact of wind farms on habitat selection and on movement patterns. 
-These results are shown in details in the following sections.
+These results are shown in details in the following figures and tables.
 
-### Coefficients for other infrastructure - All seasons
-
-Here we show the coefficient estimates for all the infrastructure types, excluding wind turbines. 
+Table C5 shows the coefficient estimates for all the infrastructure types, excluding wind turbines. Wind turbines are only included here for the barrier effects. 
 The estimates are put together for the different seasons in table C5 so it is easy to compare the effects between them.
 
 A summary of the results:
 
-- The mine was avoided in calving and summer, but not during autumn;
+- Wind farms were barriers to reindeer movement in calving during construction (and marginally during operation; p = 0.07) and in summer during wind farm operation;
+- Public roads were barrier in all seasons; 
+- The mine was avoided in summer (even though very weakly, Fig. C2), but not in calving and autumn;
 - Public and private roads were avoided in all seasons;
 - There was no effect of power lines in calving and summer, and a slight selection for them during autumn; 
-- Houses were selected during calving and autumn (*why??*);
+- Houses were selected during calving and autumn; (*why??*)
 - Start of season did not affect habitat selection during calving and summer; however, end of season was positively selected in autumn, which means animals select for areas which stay green longer in autumn.
 
 ```{r coef_general, warning=FALSE, message=FALSE, echo=FALSE}
@@ -296,7 +294,7 @@ A summary of the results:
 #| fig-cap: "Table C5. Coefficient estimates for the effects of infrastructure types and the start/end of season on habitat selection for all three seasons."
 #| 
 # read calving
-coef_calving <- readr::read_csv("../../output/ssf_results/ssf_calving_coef_table_.csv") |> 
+coef_calving <- readr::read_csv("../../output/ssf_results/ssf_calving_coef_table_cross.csv") |> 
   dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
                 p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
                 select = case_when(
@@ -333,7 +331,7 @@ coef_all <- dplyr::tibble(season = c(rep("calving", nrow(coef_calving)),
   cbind(
     dplyr::bind_rows(coef_calving, coef_summer, coef_autumn)) |> 
   dplyr::filter(grepl("log|nearest|sos|eos", term)) |> 
-  dplyr::filter(!grepl("wind|sl|ta", term)) |> 
+  dplyr::filter(!(grepl("wind|sl|ta", term) & !grepl("cross", term))) |> 
   dplyr::select(-c(statistic, significant, p.value)) |> 
   dplyr::arrange(term)
 
@@ -341,147 +339,74 @@ coef_all |>
   DT::datatable()
 ```
 
-### Coefficients - Calving
-
-Table C6 presents all the coefficient estimates for step selection during calving.
+# Table C6: Coefficients - calving
 
 ```{r, echo=FALSE}
 #| label: coef_calving
-#| fig-cap: "Table C6. Coefficient estimates for the step selection functions during calving. Parameters showing effects on movement parameters are shown separately in section C3.4."
+#| fig-cap: "Table C6. Complete table with coefficient estimates for the best-ranked integrated step selection model in calving."
  
 coef_calving |> 
-  dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
+  # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
   DT::datatable()
 ```
 
-### Coefficients - Summer
-
-Table C7 presents all the coefficient estimates for step selection during summer.
+# Table C7: Coefficients - summer
 
 ```{r, echo=FALSE}
 #| label: coef_summer
-#| fig-cap: "Table C7. Coefficient estimates for the step selection functions during summer. Parameters showing effects on movement parameters are shown separately in section C3.4."
+#| fig-cap: "Table C7. Complete table with coefficient estimates for the best-ranked integrated step selection model in summer."
 
 coef_summer |> 
-  dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
+  # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
   DT::datatable()
 ```
 
-### Coefficients - Autumn
-
-Table C8 presents all the coefficient estimates for step selection during autumn.
+# Table C8: Coefficients - autumn
 
 ```{r, echo=FALSE}
 #| label: coef_autumn
-#| fig-cap: "Table C8. Coefficient estimates for the step selection functions during autumn. Parameters showing effects on movement parameters are shown separately in section C3.4."
+#| fig-cap: "Table C8. Complete table with coefficient estimates for the best-ranked integrated step selection model in autumn."
 
 coef_autumn |> 
-  dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
+  # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
   DT::datatable()
 ```
 
-## Impacts of mining and wind turbine on step selection
+<!-- # Figure C1: Impacts of wind power on habitat selection in calving during construction phase -->
 
-Here we plot, for each season, the effect of the mine and the wind turbines, while
-keeping all the other variables at their median values, to illustrate the mean
-effect of these two types of infrastructure.
+<!-- ![Figure C1. Log-Relative selection strength as a function of the distance to wind turbines in calving during construction of the wind farms, considering the impact of n = 1 and n = 10 turbines, to illustrate the cumulative impact of multiple turbines. The model uses deciduous forests as the reference category. There is no single wind turbine (n = 1) in the landscape, but this hypothetical prediction helps us understand the cumulative dimension of the wind turbines.](../../output/ssf_results/ssf_calving_wind_const_cross.png) -->
 
-### Calving
+<!-- During operation, the responses are qualitatively similar to the construction phase, but they are not significant, as it is shown in Fig. C3. -->
 
-The mine in Kristeneberget was strongly avoided during calving, according to the iSSA (Fig. C1). It is not possible to objectively set
-a ZOI for the mine because the the best variable representing its impact was the log-distance to the mine (instead one of
-the ZOI distance-decay curves that better define the ZOI radius). However, interpreting qualitatively the curve in Fig. C1 and assessing the second best-ranked model in Table C2, we can say the ZOI radius of the mine at local level in calving is at least 250 m, but possibly larger.
+# Figure C1: Impacts of wind power on habitat selection in calving during operation phase
 
-![Figure C1. Log-Relative selection strength as a function of the distance to the mine in Kristineberget in calving. Areas close to the mine are avoided at local scale, similarly to the regional habitat selection analysis.](../../output/ssf_results/ssf_calving_mine.png)
+![Figure C1. Comparison of response curves for calving during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to wind turbines, considering the impact of 10 wind turbines. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_calving_wind_n10_const_op_cross.png) 
 
-In calving and during the construction of the wind farms, local habitat selection was affected by the density of wind turbines at 5 km ZOI. This means there was evidence of cumulative impacts of multiple wind turbines/farms on reindeer responses. Figure C2 illustrates that. The upper panel shows the expected response curves (the log Relative selection strength) as reindeer gets away from wind turbines, if hypothetically there was only one turbine. In this case, the impact would be small. However, the impact increases as the density of turbines increase (Fig. C2; n = 10 in the bottom panels), and turbines are significantly avoided within coniferous forests and marginally avoided in open areas.
+# Figure C2: Impacts of mining on habitat selection in summer
 
-![Figure C2. Log-Relative selection strength as a function of the distance to wind turbines in calving during construction of the wind farms, considering the impact of n = 1 and n = 10 turbines, to illustrate the cumulative impact of multiple turbines. The model uses deciduous forests as the reference category. There is no single wind turbine (n = 1) in the landscape, but this hypothetical prediction helps us understand the cumulative dimension of the wind turbines.](../../output/ssf_results/ssf_calving_wind_const.png)
+<!-- During summer, the mine was avoided at local scale. Even though the identified ZOI radius was 5 km, the effect size was small so the response curve of the effect of the mine decreases very fast from its maximum effect near the turbines (Fig. C4). -->
 
-During operation, the responses are qualitatively similar to the construction phase, but they are not significant, as it is shown in Fig. C3.
+![Figure C2. Log-Relative selection strength as a function of the distance to the mine in Kristineberget in summer.](../../output/ssf_results/ssf_summer_mine.png)
 
-![Figure C3. Comparison of response curves for calving during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to wind turbines, considering the impact of 10 wind turbines. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_calving_wind_n10_const_op.png) 
+<!-- During summer, there was no evidence of cumulative impacts of multiple wind farms at local scale, but there was an effect of the nearest wind turbine with ZOI radius of 5 km. Areas closer to the wind turbines were selected in open lands, coniferous forests and mires, compared to deciduous forests, mostly during construction phase (Fig. C5). -->
 
-### Summer
+# Figure C3: Impacts of wind power on habitat selection in summer
 
-During summer, the mine was avoided at local scale. Even though the identified ZOI radius was 5 km, the effect size was small so the response curve of the effect of the mine decreases very fast from its maximum effect near the turbines (Fig. C4).
+![Figure C3. Comparison of response curves for summer during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to the nearest wind turbine. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_summer_wind.png)
 
-![Figure C4. Log-Relative selection strength as a function of the distance to the mine in Kristineberget in summer.](../../output/ssf_results/ssf_summer_mine.png)
+# Figure C4: Impacts of wind power on habitat selection in autumn
 
-During summer, there was no evidence of cumulative impacts of multiple wind farms at local scale, but there was an effect of the nearest wind turbine with ZOI radius of 5 km. Areas closer to the wind turbines were selected in open lands, coniferous forests and mires, compared to deciduous forests, mostly during construction phase (Fig. C5).
-
-![Figure C5. Comparison of response curves for summer during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to the nearest wind turbine. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_summer_wind.png)
-
-### Autumn
-
-There was no effect of the mine at local scale habitat selection during autumn (p > 0.05, Table C8). The wind farms did not significantly affect reindeer local-scale habitat selection either (Table C8, Fig. C6).
+<!-- There was no effect of the mine at local scale habitat selection during autumn (p > 0.05, Table C8). The wind farms did not significantly affect reindeer local-scale habitat selection either (Table C8, Fig. C6). -->
 
 <!-- ![Figure C6. Log-Relative selection strength as a function of the distance to the mine in Kristineberget in autumn.](../../output/ssf_results/ssf_autumn_mine.png)  -->
 
-![Figure C6. Comparison of response curves for autumn during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to wind turbine, considering the impact of 10 turbines. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_autumn_wind_n10_const_op.png)
+![Figure C4. Comparison of response curves for autumn during construction and operation of the wind farms. The curves show the log-Relative selection strength as a function of the distance to wind turbine, considering the impact of 10 turbines. The model uses deciduous forests as the reference category.](../../output/ssf_results/ssf_autumn_wind_n10_const_op.png)
 
-## Impacts of wind turbines on movement patterns
+# Figure C5: Impacts of wind turbines on movement patterns in calving
 
-Here we present the coefficients for the movement parameters included in the iSSA, i.e. all term involving 
-step lengths and turning angles.
+![Figure C5. Predicted distribution of step length (left) and turning angles (right) at different distances from where the wind turbines were built, during the construction phase (upper row) and operation phase (bottom row). The plot in the left also shows boxplots of predicted movement rates. Reindeer moved faster and more directionaly when close to wind turbines during their construction, but the different was minimal during operation.](../../output/ssf_results/ssf_calving_mov_all.png)
 
-### Coefficients - Calving
-
-Table C9 shows the coefficient estimates of the iSSA model for the variables affecting the movement
-parameters and is complementary to table C6.
-
-```{r, echo=FALSE}
-#| label: coef_mov_calving
-#| fig-cap: "Table C9. Coefficient estimates for calving for the movement parameters within the iSSA."
- 
-coef_calving |> 
-  dplyr::filter(grepl("sl\\_|log_sl|ta", term)) |> 
-  dplyr::mutate(select = ifelse(grepl("avoidance", select), "negative", select),
-                select = ifelse(grepl("selection", select), "positive", select)) |> 
-  dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
-```
-
-During calving, there was an effect of wind turbines during the construction period, with a cumulative impact of multiple wind turbines and ZOI radius of 5 km. This led to increased movement rates and more directional movements when reindeer were close to the location of the wind farms, compared to places far away from them. During the operation period, though, this effect was not present.
-
-![Figure C7. Predicted distribution of step length (left) and turning angles (right) at different distances from where the wind turbines were built, during the construction phase. The plot in the left also shows boxplots of predicted movement rates. Reindeer moved faster and more directionaly when close to wind turbines during their construction.](../../output/ssf_results/ssf_calving_mov_const.png)
-
-### Coefficients - Summer
-
-There were no detectable results of the wind turbines on the movement parameters during summer, as shown in Table C10.
-
-```{r, echo=FALSE}
-#| label: coef_mov_summer
-#| fig-cap: "Table C10. Coefficient estimates for summer for the movement parameters within the iSSA."
- 
-coef_summer |> 
-  dplyr::filter(grepl("sl\\_|log_sl|ta", term)) |> 
-  dplyr::mutate(select = ifelse(grepl("avoidance", select), "negative", select),
-                select = ifelse(grepl("selection", select), "positive", select)) |> 
-  dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
-```
-
-<!-- ![](../../output/ssf_results/ssf_summer_mov_all.png) -->
-
-### Coefficients - Autumn
-
-There were no detectable results of the wind turbines on the movement parameters during autumn, as shown in Table C11.
-
-```{r, echo=FALSE}
-#| label: coef_mov_autumn
-#| fig-cap: "Table C11. Coefficient estimates for autumn for the movement parameters within the iSSA."
- 
-coef_autumn |> 
-  dplyr::filter(grepl("sl\\_|log_sl|ta", term)) |> 
-  dplyr::mutate(select = ifelse(grepl("avoidance", select), "negative", select),
-                select = ifelse(grepl("selection", select), "positive", select)) |> 
-  dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
-```
-
-<!-- ![](../../output/ssf_results/ssf_autumn_mov_all.png) -->
 

@@ -268,7 +268,7 @@ aic_autumn |>
   DT::datatable()
 ```
 
-# Text C2: Disturbance effects on step selection
+# Text C3: Disturbance effects on step selection
 
 Here we present the coefficients of the iSSA models on habitat selection at local scale. Even though all results come from the same models, we split the way we present the parts of the resulting model, to ease
 its interpretation. In this section we restrict ourselves on

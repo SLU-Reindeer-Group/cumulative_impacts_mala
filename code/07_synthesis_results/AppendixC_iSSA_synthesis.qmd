@@ -1,5 +1,5 @@
 ---
-title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: habitat selection and movement at local scale (integrated step selection analysis, iSSA)"
+title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: habitat selection and movement at patch scale (integrated step selection analysis, iSSA)"
 author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Per Sandström, Anna Skarin
 format: 
   html:
@@ -22,7 +22,7 @@ library(sf)
 library(tmap)
 ```
 
-Here we provide supplementary information regarding the local assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at local scale and on movement parameters. We present, for each season:
+Here we provide supplementary information regarding the local assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at the foraging patch scale and on movement parameters. We present, for each season:
 
 - the reindeer GPS data used for the analyses;
 - the setup of the iSSA models;
@@ -107,7 +107,7 @@ summ_data |>
 
 # Text C1: Statistical modeling of the iSSA
 
-As described in the main text, the small-scale habitat selection analysis followed a iSSA. The overall model structure we fitted was the following:
+As described in the main text, the patch-scale habitat selection analysis followed a iSSA. The overall model structure we fitted was the following:
 
 ```{r}
 base_formula <- case_ ~ strata(step_id_) +
@@ -131,7 +131,11 @@ base_formula <- case_ ~ strata(step_id_) +
   landcover_end:wind_turbines_YYY_end_construction_scaled +
   landcover_end:wind_turbines_ZZZ_end_operation_scaled +
   # tpi habitat selection
-  tpi_scale_TTT
+  tpi_scale_TTT +
+  # barriers to movement (along the steps)
+  public_road_nearest100_cross +
+  wind_turbines_nearest500_cross_construction +
+  wind_turbines_nearest500_cross_operation
 ```
 
 where:
@@ -155,7 +159,7 @@ where:
 
 The model structure contains the movement parameters, including its interaction with the effects of land cover and wind turbines; habitat selection considering the effects of wind turbines in each phase (construction, operation) in interaction with land cover; and main effects of other infrastructure and landscape variables. 
 
-The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection and movement, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
+The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection and movement, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for mining, together with different scales for the TPI (see Fig. B1 in Appendix B). Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
 
 - Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
@@ -270,7 +274,7 @@ aic_autumn |>
 
 # Text C3: Disturbance effects on step selection
 
-Here we present the coefficients of the iSSA models on habitat selection at local scale. Even though all results come from the same models, we split the way we present the parts of the resulting model, to ease
+Here we present the coefficients of the iSSA models on habitat selection at patch scale. Even though all results come from the same models, we split the way we present the parts of the resulting model, to ease
 its interpretation. In this section we restrict ourselves on
 presenting the coefficients of all infrastructure and landscape covariates, without going into 
 details regarding the impact of wind farms on habitat selection and on movement patterns. 

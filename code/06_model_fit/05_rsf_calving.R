@@ -240,6 +240,8 @@ best_fit <- glm(form,
 #                 data = data_ready_calving_rsf_2h, #weights = w_obs,
 #                 family = binomial(link = "logit"))
 best_fit$formula
+summary(best_fit)
+car::vif(best_fit)
 
 #---------------
 # More info, summary, and predictions on the best model

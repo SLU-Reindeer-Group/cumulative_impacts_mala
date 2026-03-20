@@ -1,5 +1,5 @@
 ---
-title: "Appendix B. Cumulative impacts of mining and wind power development on reindeer: large-scale habitat selection analysis (HSA)"
+title: "Appendix B. Cumulative impacts of mining and wind power development on reindeer: landscape-scale habitat selection analysis (HSA)"
 author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
 format: 
   html:
@@ -22,7 +22,7 @@ library(sf)
 library(tmap)
 ```
 
-Here we provide supplementary information regarding the regional (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We also refer to this analysis as a large-scale assessment of habitat selection. We present, for each season:
+Here we provide supplementary information regarding the regional (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We also refer to this analysis as a landscape-scale assessment of habitat selection. We present, for each season:
 
 - the setup of the habitat selection models;
 - the best-ranged habitat selection models;
@@ -33,7 +33,7 @@ Here we provide supplementary information regarding the regional (2nd order) ass
 
 # Text B1: Statistical modeling of the HSA
 
-As described in the main text, the large-scale HSA followed a habitat selection function
+As described in the main text, the landscape-scale HSA followed a habitat selection function
 setup. The overall model structure we fitted was the following:
 
 ```{r}
@@ -68,11 +68,13 @@ where the terms are:
 - `mining_Krist_nearestXXX`: ZOI (exponential decay distance) of the mine, computed considering a certain ZOI radius; 
 - `wind_turbines_ZZZ`: ZOI of wind turbines (considering either the density or the nearest infrastructure only), computed considering a certain ZOI radius.
 
-The terms `XXX`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest) for wind power and the different ZOI radii for the mine, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
+The terms `XXX`, `ZZZ`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest; Fig. B1) for wind power and the different ZOI radii for the mine, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
 
 - Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - TPI: 125 m, 250 m, 510 m.
+
+![Figure B1. Illustration of two types of measures used to represent the influence of wind turbines in our study. The upper row shows the expected impact if we consider the effect of the nearest wind turbine only, which is similar whether one gets closer to one isolated turbine or a whole wind park. The bottom row shows the density of wind turbines, which captures the cumulative impact of multiple wind turbines and is larger when one gets closer to a wind park than to an isolated wind turbine. These two types of variables were used as predictors in the statistical models to estimate whether there were cumulative impacts of features of the same type.](FB1_conceptual_cumulative_impacts.png)
 
 # Text B2: Best-ranked habitat selection models
 
@@ -305,59 +307,59 @@ coef_autumn |>
   DT::datatable()
 ```
 
-# Figure B1: Impacts of mining on habitat selection in calving
+# Figure B2: Impacts of mining on habitat selection in calving
 
-![Figure B1. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in calving. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_calving_mining.png)
+![Figure B2. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in calving. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_calving_mining.png)
 
 <!-- The effect of the wind turbines before, during, and after the construction of the wind farms, for different land use types, is shown in Fig. B2.  -->
 <!-- Open lands (which include clear cuts), coniferous forests, and mires were avoided up to 2.5-5 km from the wind turbines, when we compare the reindeer behavior before and during/after the construction of the turbines. Deciduous forests (including forested wetlands) in the proximity  -->
 <!-- of the wind parks were also avoided during construction phase, but not during operation phase. -->
 
-# Figure B2: Impacts of wind power on habitat selection in calving
+# Figure B3: Impacts of wind power on habitat selection in calving
 
-![Figure B2. Relative predicted probability of use of areas as a function of the distance to the nearest wind turbine in calving, using Ytterberg wind park as a reference.](../../output/rsf_results/rsf_calving_wind_phase_landcc_groupedytteberg.png)
+![Figure B3. Relative predicted probability of use of areas as a function of the distance to the nearest wind turbine in calving, using Ytterberg wind park as a reference.](../../output/rsf_results/rsf_calving_wind_phase_landcc_groupedytteberg.png)
 
 <!-- The effect is qualitatively similar when reindeer are closer to each of the four wind parks, but is smaller when close to Åmliden wind park in the Southeast, most probably because of joint effect of the fence which is a barrier for reindeer movement. This differential behavior is shown in the spatial prediction of the habitat suitability for reindeer in calving (and also in the other seasons) in Fig. B3. -->
 
-# Figure B3: Predicted habitat suitability in calving
+# Figure B4: Predicted habitat suitability in calving
 
-![Figure B3. Predicted habitat suitability for reindeer in calving before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB3_HSA_suitability_calving.png)
+![Figure B4. Predicted habitat suitability for reindeer in calving before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB3_HSA_suitability_calving.png)
 
 <!-- Fig. B3 shows the habitat suitability predicted from the best ranked models for all phases, as well as the reindeer GPS positions in each of the phases. The models fit well the GPS data and show very strong avoidance of the area around the mine, represented by a large areas in white with very small habitat suitability. It also shows avoidance of the wind turbines during construction and operation phases, even though this difference is more evident when looking at the difference in habitat suitability (see Fig. 3 in the main text).   -->
 
 <!-- **WE STILL NEED to compute the proportion in habitat suitability lost within the ZOI, just as a reference to be reported!!!** -->
 
-# Figure B4: Impacts of mining on habitat selection in summer
+# Figure B5: Impacts of mining on habitat selection in summer
 
-![Figure B4. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in summer. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_summer_mining.png)
+![Figure B5. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in summer. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_summer_mining.png)
 
 <!-- During summer, there was evidence of cumulative impacts of multiple wind farms on reindeer habitat selection at regional scale. To interpret, however, it is necessary to account for the density of wind turbines within a neighborhood. In Fig. B5 we show the predicted response curves against the distance to the wind farm in it was composed by n = 1 turbine (top row) or by n = 10 wind turbines (bottom row). The difference between predictions shows the cumulative dimension of the density of wind turbines. -->
 
 <!-- As we expected, reindeer did not avoid wind turbines during summer. Reindeer already used the mountains where the turbines were built before, most probably because the are open areas with wind that is suitable for releasing the pressure of insect harassment [@skarin_insect_2004; @valente_attacked_2020]. Reindeer seem to have increased the use of these mountains after the construction of the turbines, also. (**why?**)  -->
 
-# Figure B5: Impacts of wind power on habitat selection in summer
+# Figure B6: Impacts of wind power on habitat selection in summer
 
-![Figure B5. Relative predicted probability of use of areas versus the distance to the nearest wind turbine in summer, using Ytterberg wind park as a reference. Top row shows the (hypothetical) prediction if the wind park was composed only by n = 1 wind turbine - a small impact. The bottom row shows a cumulative impact of n = 10 wind turbines, which gets much larger.](../../output/rsf_results/summer_wind_phase_landcc_ytte_dist.png)
+![Figure B6. Relative predicted probability of use of areas versus the distance to the nearest wind turbine in summer, using Ytterberg wind park as a reference. Top row shows the (hypothetical) prediction if the wind park was composed only by n = 1 wind turbine - a small impact. The bottom row shows a cumulative impact of n = 10 wind turbines, which gets much larger.](../../output/rsf_results/summer_wind_phase_landcc_ytte_dist.png)
 
 <!-- Fig. B6 shows the habitat suitability predicted from the best ranked models for all phases, as well as the reindeer GPS positions in each of the phases. The models fit well the GPS data and show high selection for the mountains where the wind farms were built in all phases, including during and after the construction of the wind turbines. -->
 
-# Figure B6: Predicted habitat suitability in summer
+# Figure B7: Predicted habitat suitability in summer
 
-![Figure B6. Predicted habitat suitability for reindeer in summer before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB4_HSA_suitability_summer.png)
+![Figure B7. Predicted habitat suitability for reindeer in summer before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB4_HSA_suitability_summer.png)
 
-# Figure B7: Impacts of mining on habitat selection in autumn
+# Figure B8: Impacts of mining on habitat selection in autumn
 
-![Figure B7. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in autumn. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_autumn_mining.png)
+![Figure B8. Relative predicted probability of use of areas as a function of the distance to the mine in Kristineberget in autumn. Areas close to the mine are avoided up to ca. 10 km.](../../output/rsf_results/rsf_autumn_mining.png)
 
 <!-- In the proximity of the wind farms, deciduous forests and mires were avoided more strongly in the construction and operation phases, compared to the baseline (before construction; Fig. B8). The difference in selection between areas close to the wind farms and far from wind farms was also higher in the period preconstruction than during construction and operation phases, which points to an overall decrease in habitat suitability in the surroundings of the wind farms.  -->
 
-# Figure B8: Impacts of wind power on habitat selection in autumn
+# Figure B9: Impacts of wind power on habitat selection in autumn
 
-![Figure B8. Relative predicted probability of use of areas as a function of the distance to the nearest wind turbine in autumn, using Ytterberg wind park as a reference.](../../output/rsf_results/rsf_autumn_wind_phase_landcc_grouped_ytteberg.png)
+![Figure B9. Relative predicted probability of use of areas as a function of the distance to the nearest wind turbine in autumn, using Ytterberg wind park as a reference.](../../output/rsf_results/rsf_autumn_wind_phase_landcc_grouped_ytteberg.png)
 
 <!-- Fig. B9 shows the predicted habitat suitability in the three different phases and the GPS data showing reindeer positions in autumn. The avoidance of wind turbines and decrease in habitat suitability is more pronounced and evident during the operation of the wind farms (Fig. B9), what illustrates the large ZOI radius -->
 <!-- found also during autumn. There was no evidence of cumulative impacts of multiple wind farms, though, as the best ranked models included the impact of the nearest wind turbine only. -->
 
-# Figure B9: Predicted habitat suitability in autumn
+# Figure B10: Predicted habitat suitability in autumn
 
-![Figure B9. Predicted habitat suitability for reindeer in autumn before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB5_HSA_suitability_autumn.png)
+![Figure B10. Predicted habitat suitability for reindeer in autumn before the construction of the wind farms (left), during the construction (center), and during operation of the wind farms (right). The top row shows the habitat suitability, in a gradient from 0 (white) to 1 (green), and shows the location of the wind turbines and the mine. It also highlights a buffer of 5 km around the wind farms and 10 km around the mine, just as a reference for interpretation. The bottom row shows the GPS data for each phase superimposed over the habitat suitabiltiy predictions.](FB5_HSA_suitability_autumn.png)

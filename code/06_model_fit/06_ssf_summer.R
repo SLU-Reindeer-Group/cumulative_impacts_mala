@@ -353,7 +353,6 @@ best_fit <- amt::fit_issf(form,
                           data = data_ready_summer_ssf_2h, 
                           model = TRUE)
 # best_fit <- fit1$model
-
 best_fit$model$formula
 summary(best_fit)
 

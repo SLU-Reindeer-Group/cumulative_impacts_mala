@@ -1,0 +1,122 @@
+---
+title: "Appendix D. Cumulative impacts of mining and wind power development on reindeer: calving-site selection data and analysis"
+author: Léonie Duris, Bernardo B. Niebuhr, Erik Cronvall, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
+format: 
+  html:
+    self-contained: true
+    toc: true
+    toc-depth: 4 # default is 3
+    toc-title: Contents
+    toc-location: left
+    number-sections: true
+editor: source
+  markdown: 
+    wrap: 72
+bibliography: references.bib
+---
+
+```{r setup, warning=FALSE, message=FALSE, echo=FALSE}
+library(readr)
+library(dplyr)
+library("DT") # Interactive HTML tables
+library(terra)
+library(sf)
+library(tmap)
+```
+
+Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. We report:
+
+-   the calving period and site identification;
+-   the statistical modeling of cumulative impact analysis;
+-   the model selection table;
+-   the analysis of calving site selection and forage quality
+
+# Figure D1: Calving period and site identification
+
+![Figure D1. Example of residence time time series employed to find the calving period and calving sites using the function residenceTime() from the recurse package. The most probable calving period is between the second and third red line corresponding to the group that includes the first highest peak of the time series. The grouping was performed using the lavielle() and findpath() functions from the adehabitatLT package in R. The calving site was the mean location where calving occurred.](images/rt_RG_08_118_2009.RTindex.jpeg)
+
+# Text D1: Statistical modeling of cumulative impact analysis
+
+As in the landscape-scale habitat selection analysis, we used a habitat selection function setup. However, considering only individuals within 2 km of the wind turbines during calving to assess the effect of wind power drastically reduced the number of observations, preventing the use of the habitat selection function for that purpose. The habitat selection function was used only to assess the mine's zone of influence.
+
+Ten random available but unused sites were generated within the estimated calving area for each of the truly used calving sites (R package “amt”, function “random points”). We determined the calving area by calculating the minimum convex polygon around all the used calving sites. To ensure considering the entire calving area, we extended this estimated area to half of the mean net square displacement of the individuals who calved at the border of the minimum convex polygon.
+
+We adapted the formula described in Appendix B as the following:
+
+```{r}
+base_formula <- case_ ~ 
+  # habitat selection
+  scale(dem) + I(scale(dem)^2) + scale(slope) + cos_aspect + 
+  log(power_lines_dist+1) + log(priv_road_dist+1) + log(public_road_dist+1) + 
+  log(trails_dist+1) + 
+  # mining habitat selection
+  scale(mining_Krist_nearestXXX) +
+  # wind habitat selection
+  landcover + phase*log(wind_turbines_dist + 1) +
+  # tpi habitat selection
+  tpi_scale_TTT
+```
+
+where the terms are:
+
+-   `case_`: our response variable (0/1);
+-   `dem`: elevation, we include a linear and a quadratic term;
+-   `slope`: slope;
+-   `cos_aspect`: cosine of the aspect;
+-   `tpi_scale_TTT`: topographic position index (TPI) as a continuous variable and computed at a certain scale;
+-   `phase`: wind farm development phase, with 3 categories: before construction, during construction, operation;
+-   `wf_name`: name of the wind farm closest to each point, with four categories, added as a fixed effect to control for differential effects close to the Åmliden wind park, which lies along a large fenced area;
+-   `landcover`: land cover, with 5 categories: deciduous forest, coniferous forest, open areas, mires, and anthropogenic areas;
+-   `log(public_road_dist+1)`, `log(priv_road_dist+1)`, `log(trails_dist+1)`, `log(power_lines_dist+1)`,`log(wind_turbines_dist_comb + 1)`: logarithm of the distance to the nearest infrastructure for public roads, private roads, trails, houses, power lines and wind turbines;
+-   `mining_Krist_nearestXXX`: ZOI (exponential decay distance) of the mine, computed considering a certain ZOI radius;
+
+The terms `XXX`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind farms, and at which scale the TPI most affected reindeer habitat selection, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest; Fig. B1) for wind power and the different ZOI radii for the mine, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
+
+-   Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2km, 2.5 km, 3 km, 5 km, 7.5km, 10 km.
+-   TPI (`TTT`): 150 m, 250 m, 510 m.
+
+# Table D1: Model selection table in calving sites
+
+```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
+#| label: aic_calving
+#| fig-cap: "Table D1. Table of model selection for the calving site selection model. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. The model to select is the model with ZOI = 10km and TPI = 250m"
+
+aic_calving <- readr::read_csv( "results/CSV/rsf_calving_AIC_table_complete.csv")[-2]
+
+aic_calving |> 
+  dplyr::slice(-1) |> 
+  dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
+                aic = round(aic, digits = 2),
+                tpi = sub("tpi_cat_s", "", tpi)) |> 
+  dplyr::relocate(definition, .after = last_col()) |> 
+  dplyr::select(-lc) |>
+  dplyr::rename(`Mining ZOI radius` = 1,
+                `Wind turbine ZOI radius` = 2,
+                TPI = tpi,
+                AIC = aic,
+                formula = definition) |> 
+  DT::datatable()
+```
+
+# Table D2: Final model results
+
+```{r}
+#| label: coef_general
+#| fig-cap: "Table D2. Summary of the most parsimonious generalized linear model testing the effect of infrastructures on reindeer calving site selection from the Malå reindeer herding community between 2008 and 2018. The table includes the estimates, the standard error (std.error) and the p-values (p)"
+#| 
+# read calving
+
+coef_calving <- read.csv("results/CSV/rsf_calving_AIC_table_log2.csv", sep = ",", dec = ".")
+
+coef_calving[,-c(4,5,6)] |> 
+  DT::datatable()
+
+```
+
+# Figure D2: Difference in calving dates between females that had been close to the wind turbines and those that had not
+
+![Figure D2. Distribution of the day of the year when calving occured in Malå reindeer herding community from 2008 to 2018 according to phase. Colors represent the distribution for all the individuals, only the individuals that had been within 2km of the wind turbines during the calving period, and only the ones that had always been further away than 2km. ](images/datecalving.png){fig-align="center"}
+
+# Figure D3: Synchrony between calving date and forage quality
+
+![Figure D3. Distribution of the absolute difference in days between the maximum instantaneous rate of green up and the dates of calving at calving sites for the females that have been within 2km from the wind turbines during calving in Malå reindeer herding community for each year from 2008 to 2018. The colors represent the phase of construction of the wind turbines. ](images/synchronyIRG.png)

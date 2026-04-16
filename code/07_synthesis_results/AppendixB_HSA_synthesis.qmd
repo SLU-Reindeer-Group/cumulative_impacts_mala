@@ -1,6 +1,6 @@
 ---
 title: "Appendix B. Cumulative impacts of mining and wind power development on reindeer: landscape-scale habitat selection analysis (HSA)"
-author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
+author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 format: 
   html:
     self-contained: true
@@ -72,7 +72,7 @@ The terms `XXX`, `ZZZ`, and `TTT` in the model structure above represent scales 
 
 - Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
-- TPI: 125 m, 250 m, 510 m.
+- TPI: 150 m, 250 m, 510 m.
 
 ![Figure B1. Illustration of two types of measures used to represent the influence of wind turbines in our study. The upper row shows the expected impact if we consider the effect of the nearest wind turbine only, which is similar whether one gets closer to one isolated turbine or a whole wind park. The bottom row shows the density of wind turbines, which captures the cumulative impact of multiple wind turbines and is larger when one gets closer to a wind park than to an isolated wind turbine. These two types of variables were used as predictors in the statistical models to estimate whether there were cumulative impacts of features of the same type.](FB1_conceptual_cumulative_impacts.png)
 

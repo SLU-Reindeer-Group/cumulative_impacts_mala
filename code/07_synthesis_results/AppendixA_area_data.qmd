@@ -1,6 +1,6 @@
 ---
 title: "Appendix A. Study area details and environmental data sources"
-author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Sven Adler, Per Sandström, Anna Skarin
+author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 format: 
   html:
     self-contained: true
@@ -23,18 +23,17 @@ library(sf)
 library(tmap)
 ```
 
-
-In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of 
-mine and wind farms on reindeer in the Malå reindeer herding community in Northern Sweden. More specifically, we:
+In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind farms on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we:
 
 - Detail the definition of the seasons in each year for which we used GPS data;
-- Present and describe the availbility areas in each of the seasons; 
-- Describe all the environmental data used the study, pointing to sources, geographical information, thematic resolution, and details
-on the processing and preparation of the data layers.
+<!-- - Present and describe the availability areas in each of the seasons;  -->
+- Describe all the environmental data used in the study, pointing to sources, geographical information, thematic resolution, and details on the processing and preparation of the data layers;
+- Present a summary statistics of the values for the environmental variables for the study area. 
 
 # Seasons
 
-Describe here
+Table A1 shows the dates of start and end of each season for each year, defined based 
+on information from the reindeer herders in the Malå RHC.
 
 ```{r load_seasons, warning=FALSE, echo=FALSE}
 seasons <- readxl::read_xlsx("details_snow_free_mala_clean.xlsx") 
@@ -42,26 +41,24 @@ seasons <- readxl::read_xlsx("details_snow_free_mala_clean.xlsx")
 
 ```{r data_seasons, echo=FALSE}
 #| label: data_seasons
-#| fig-cap: "Table A1. Dates of the calving, Summer, and Autumn seasons in each of the years of reindeer monitoring."
+#| fig-cap: "Table A1. Dates of the calving, summer, and autumn seasons in each of the years of reindeer monitoring."
 #|
 
 seasons |> 
-  dplyr::mutate(Calving = paste0(`Start Calving`, " - ", `End Calving`),
-                Summer = paste0(`Start Summer`, " - ", `End Summer`),
-                Autumn = paste0(`Start Autumn`, " - ", `End Autumn`)) |> 
+  dplyr::mutate(Calving = paste0(`Start Calving`, " to ", `End Calving`),
+                Summer = paste0(`Start Summer`, " to ", `End Summer`),
+                Autumn = paste0(`Start Autumn`, " to ", `End Autumn`)) |> 
   dplyr::select(Year, Phase, Calving:Autumn) |> 
   DT::datatable()
 ```
 
-# Availability areas
+<!-- # Availability areas -->
 
-Describe here, add figure (or figures with the three polygons and the location of the other important things (mine, wind turbine etc))
+<!-- Describe here, add figure (or figures with the three polygons and the location of the other important things (mine, wind turbine etc)) -->
 
 # Environmental data
 
-All maps were processed in GRASS GIS environment, version 7.8 (REF), in SWEREF99 (EPSG:3006) coordinate reference system.
-
-Add table, explain
+All environmental data was processed in GRASS GIS environment, version 7.8 (REF), in SWEREF99 (EPSG:3006) coordinate reference system. All vector data was rasterized with resolution 10 m to be processed and used in the analyses. Environmental variables, data sources, and data processing are described in Table A2.
 
 ```{r load_env, warning=FALSE, echo=FALSE}
 env_data <- readxl::read_xlsx("environmental_data.xlsx") 
@@ -69,9 +66,93 @@ env_data <- readxl::read_xlsx("environmental_data.xlsx")
 
 ```{r data_env, echo=FALSE}
 #| label: data_env
-#| fig-cap: "Table A2. Description of the environmental layers used for estimating reindeer habitat selection and movement patterns.."
+#| fig-cap: "Table A2. Description of the environmental variables used for estimating reindeer habitat selection and movement patterns."
 #|
 
 env_data |> 
+  dplyr::mutate(Source = ifelse(is.na(Source), Source, paste0('<a href="', Source, '" target="_blank">', Source, '</a>'))) |>
+  DT::datatable(escape = FALSE)
+```
+
+
+# Summary statistics of environmental variables
+
+```{r, echo=FALSE}
+#| label: data_summ
+#| fig-cap: "Table A3. Summary statistics (mean and range, or proportion of land use classes) of the environmental variables used for estimating reindeer habitat selection and movement patterns."
+
+# vindval data
+load(file = "../../data/01_GPS/05_annotated_data/data_annotated_calving_ready_2h_rsf.RData")
+load(file = "../../data/01_GPS/05_annotated_data/data_annotated_autumn_ready_2h_rsf.RData")
+
+# grouped land cover
+data_ready_calving_rsf_2h <- data_ready_calving_rsf_2h |> 
+  dplyr::mutate(landcover_cc_grouped = forcats::fct_collapse(landcover_cc, 
+                                                     "deciduous forests" = c("deciduous forests", "forested wetlands"),
+                                                     "open lands" = c("open lands", "clear cuts")),
+                landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
+
+data_ready_autumn_rsf_2h <- data_ready_autumn_rsf_2h |> 
+  dplyr::mutate(landcover_cc_grouped = forcats::fct_collapse(landcover_cc, 
+                                                             "deciduous forests" = c("deciduous forests", "forested wetlands"),
+                                                             "open lands" = c("open lands", "clear cuts")),
+                landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
+
+# summary
+lc_prop <- data_ready_calving_rsf_2h |>
+  dplyr::filter(case_ == 0) |>
+  pull(landcover_cc) |>
+  table() |>
+  prop.table()
+# lc_prop[1]/(lc_prop[1] + lc_prop[3])
+
+lc_prop_grouped <- data_ready_calving_rsf_2h |>
+  dplyr::filter(case_ == 0) |>
+  pull(landcover_cc_grouped) |>
+  table() |>
+  prop.table()
+# lc_prop_grouped
+
+lc_prop_grouped_prep <- lc_prop_grouped |>
+  stack() |>
+  dplyr::select(Variable = ind, Proportion = values) |>
+  dplyr::mutate(Variable = stringr::str_to_sentence(as.character(Variable)),
+                Proportion = paste0(round(100 * Proportion, digits = 2), "%"))
+
+table_eos <- data_ready_autumn_rsf_2h |>
+  dplyr::filter(case_ == 0) |>
+  dplyr::summarise(mean_eos = mean(eos), min_eos = min(eos), max_eos = max(eos)) |> 
+  dplyr::mutate(across(where(is.numeric), ~ round(.x, digits = 0)))
+
+data_ready_calving_rsf_2h |>
+  dplyr::filter(case_ == 0) |>
+  dplyr::summarise(mean_elev = mean(dem), min_elev = min(dem), max_elev = max(dem),
+                   mean_slope = mean(slope), min_slope = min(slope), max_slope = max(slope),
+                   mean_sos = mean(sos), min_sos = min(sos), max_sos = max(sos),
+                   mean_eos = table_eos$mean_eos, min_eos = table_eos$min_eos, max_eos = table_eos$max_eos,
+                   mean_public_road = mean(public_road_dist), min_public_road = min(public_road_dist), max_public_road = max(public_road_dist),
+                   mean_priv_road = mean(priv_road_dist), min_priv_road = min(priv_road_dist), max_priv_road = max(priv_road_dist),
+                   mean_power_lines = mean(power_lines_dist), min_power_lines = min(power_lines_dist), max_power_lines = max(power_lines_dist),
+                   mean_wind_turbines = mean(wind_turbines_dist_comb), min_wind_turbines = min(wind_turbines_dist_comb), max_wind_turbines = max(wind_turbines_dist_comb)) |>
+  dplyr::mutate(across(where(is.numeric), ~ round(.x, digits = 0))) |>
+  dplyr::mutate(`Elevation (m)` = paste0(mean_elev, " (", min_elev, " - ", max_elev, ")"),
+                `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")"),
+                `Start of season (doy)` = paste0(mean_sos, " (", min_sos, " - ", max_sos, ")"),
+                `End of season (doy)` = paste0(mean_eos, " (", min_eos, " - ", max_eos, ")"),
+                `Distance to public roads (m)` = paste0(mean_public_road, " (", min_public_road, " - ", max_public_road, ")"),
+                `Distance to private roads (m)` = paste0(mean_priv_road, " (", min_priv_road, " - ", max_priv_road, ")"),
+                `Distance to wind turbines (m)` = paste0(mean_wind_turbines, " (", min_wind_turbines, " - ", max_wind_turbines, ")"),
+                `Distance to power lines (m)` = paste0(mean_power_lines, " (", min_power_lines, " - ", max_power_lines, ")"),
+                `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")"),
+                `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")")) |>
+  dplyr::select(-starts_with(c("mean", "min", "max"))) |>
+  t() |>
+  as.data.frame() |>
+  # tibble::tibble() #|>
+  tibble::rownames_to_column(var = "Variable") |>
+  dplyr::rename(Proportion = 2) |>
+  dplyr::bind_rows(lc_prop_grouped_prep) |>
+  dplyr::rename("Average (range) or proportion" = 2) |> 
   DT::datatable()
 ```
+

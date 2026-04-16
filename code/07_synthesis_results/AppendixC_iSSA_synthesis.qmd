@@ -1,6 +1,6 @@
 ---
 title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: habitat selection and movement at patch scale (integrated step selection analysis, iSSA)"
-author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Per Sandström, Anna Skarin
+author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 format: 
   html:
     self-contained: true
@@ -163,7 +163,7 @@ The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent 
 
 - Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
-- TPI: 125 m, 250 m, 510 m.
+- TPI: 150 m, 250 m, 510 m.
 
 # Text C2: Best-ranked integrated step-selection models
 

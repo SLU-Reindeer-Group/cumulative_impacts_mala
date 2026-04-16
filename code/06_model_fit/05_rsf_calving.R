@@ -48,6 +48,56 @@ data_ready_calving_rsf_2h <- data_ready_calving_rsf_2h |>
                 landcover_cc_grouped = relevel(landcover_cc_grouped, ref = "deciduous forests"))
 levels(data_ready_calving_rsf_2h$landcover_cc_grouped)
 
+# summary
+# lc_prop <- data_ready_calving_rsf_2h |> 
+#   dplyr::filter(case_ == 0) |> 
+#   pull(landcover_cc) |> 
+#   table() |> 
+#   prop.table()
+# lc_prop[1]/(lc_prop[1] + lc_prop[3])
+# 
+# lc_prop_grouped <- data_ready_calving_rsf_2h |> 
+#   dplyr::filter(case_ == 0) |> 
+#   pull(landcover_cc_grouped) |> 
+#   table() |> 
+#   prop.table()
+# lc_prop_grouped
+# 
+# lc_prop_grouped_prep <- lc_prop_grouped |> 
+#   stack() |> 
+#   dplyr::select(Variable = ind, Proportion = values) |>
+#   dplyr::mutate(Variable = stringr::str_to_sentence(as.character(Variable)),
+#                 Proportion = paste0(round(100 * Proportion, digits = 2), "%"))
+# 
+# data_ready_calving_rsf_2h |> 
+#   dplyr::filter(case_ == 0) |> 
+#   dplyr::summarise(mean_elev = mean(dem), min_elev = min(dem), max_elev = max(dem),
+#                    mean_slope = mean(slope), min_slope = min(slope), max_slope = max(slope),
+#                    mean_sos = mean(sos), min_sos = min(sos), max_sos = max(sos),
+#                    #mean_eos = mean(eos), min_eos = min(eos), max_eos = max(eos),
+#                    mean_public_road = mean(public_road_dist), min_public_road = min(public_road_dist), max_public_road = max(public_road_dist),
+#                    mean_priv_road = mean(priv_road_dist), min_priv_road = min(priv_road_dist), max_priv_road = max(priv_road_dist),
+#                    mean_power_lines = mean(power_lines_dist), min_power_lines = min(power_lines_dist), max_power_lines = max(power_lines_dist),
+#                    mean_wind_turbines = mean(wind_turbines_dist_comb), min_wind_turbines = min(wind_turbines_dist_comb), max_wind_turbines = max(wind_turbines_dist_comb)) |>
+#   dplyr::mutate(across(where(is.numeric), ~ round(.x, digits = 0))) |> 
+#   dplyr::mutate(`Elevation (m)` = paste0(mean_elev, " (", min_elev, " - ", max_elev, ")"),
+#                 `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")"),
+#                 `Start of season (date)` = paste0(mean_sos, " (", min_sos, " - ", max_sos, ")"),
+#                 `Distance to public roads (m)` = paste0(mean_public_road, " (", min_public_road, " - ", max_public_road, ")"),
+#                 `Distance to private roads (m)` = paste0(mean_priv_road, " (", min_priv_road, " - ", max_priv_road, ")"),
+#                 `Distance to wind turbines (m)` = paste0(mean_wind_turbines, " (", min_wind_turbines, " - ", max_wind_turbines, ")"),
+#                 `Distance to power lines (m)` = paste0(mean_power_lines, " (", min_power_lines, " - ", max_power_lines, ")"),
+#                 `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")"),
+#                 `Slope (degrees)` = paste0(mean_slope, " (", min_slope, " - ", max_slope, ")")) |> 
+#   dplyr::select(-starts_with(c("mean", "min", "max"))) |> 
+#   t() |> 
+#   as.data.frame() |> 
+#   # tibble::tibble() #|> 
+#   tibble::rownames_to_column(var = "Variable") |> 
+#   dplyr::rename(Proportion = 2) |> 
+#   dplyr::bind_rows(lc_prop_grouped_prep) |> 
+#   dplyr::rename("Average (range) or proportion" = 2)
+  
 summary(data_ready_calving_rsf_2h$wind_turbines_dist_comb)
 #hist(data_ready_calving_rsf_2h$wind_turbines_dist_comb+1, breaks = 100, xlim = c(0, 10000))
 

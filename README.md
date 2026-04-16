@@ -1,2 +1,3 @@
-# cumulative_impacts_mala
-Analysis of impacts of infrastructure on reindeer on Malå reindeer herding district in Sweden
+# Analysis of cumulative impacts of mining and wind power development on reindeer on Malå Sámi reindeer herding district in Sweden
+
+

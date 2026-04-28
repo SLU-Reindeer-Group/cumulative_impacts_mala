@@ -804,3 +804,7 @@ maps_calving_diff |>
 maps_calving_prop |> 
   terra::writeRaster(filename = "output/rsf_spatial_predictions/rsf_map_difference_prop_calving_lc_grouped.tif",
                      gdal = "COMPRESS=DEFLATE", overwrite = TRUE)
+
+#--------------------
+
+maps_calving_prop[[1]]

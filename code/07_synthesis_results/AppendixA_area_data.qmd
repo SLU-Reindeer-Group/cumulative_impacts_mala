@@ -1,14 +1,19 @@
 ---
 title: "Appendix A. Study area details and environmental data sources"
-author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
+author: ""
+#author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 format: 
-  html:
-    self-contained: true
+  pdf:
     toc: true
-    toc-depth: 4 # default is 3
-    toc-title: Contents
-    toc-location: left
     number-sections: true
+    colorlinks: true
+  # html:
+  #   self-contained: true
+  #   toc: true
+  #   toc-depth: 4 # default is 3
+  #   toc-title: Contents
+  #   toc-location: left
+  #   number-sections: true
 editor: source
 bibliography: references.bib
 ---
@@ -23,7 +28,7 @@ library(sf)
 library(tmap)
 ```
 
-In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind farms on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we:
+In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind power plants on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we:
 
 - Detail the definition of the seasons in each year for which we used GPS data;
 <!-- - Present and describe the availability areas in each of the seasons;  -->
@@ -58,7 +63,7 @@ seasons |>
 
 # Environmental data
 
-All environmental data was processed in GRASS GIS environment, version 7.8 (REF), in SWEREF99 (EPSG:3006) coordinate reference system. All vector data was rasterized with resolution 10 m to be processed and used in the analyses. Environmental variables, data sources, and data processing are described in Table A2.
+All environmental data was processed in GRASS GIS environment, version 7.8 (GRASS Development Team, 2017), in SWEREF99 (EPSG:3006) coordinate reference system. All vector data was rasterized with resolution 10 m to be processed and used in the analyses. Environmental variables, data sources, and data processing are described in Table A2.
 
 ```{r load_env, warning=FALSE, echo=FALSE}
 env_data <- readxl::read_xlsx("environmental_data.xlsx") 
@@ -70,7 +75,7 @@ env_data <- readxl::read_xlsx("environmental_data.xlsx")
 #|
 
 env_data |> 
-  dplyr::mutate(Source = ifelse(is.na(Source), Source, paste0('<a href="', Source, '" target="_blank">', Source, '</a>'))) |>
+  dplyr::mutate(Source = ifelse(is.na(Source) | Source == "Derived data", Source, paste0('<a href="', Source, '" target="_blank">', Source, '</a>'))) |>
   DT::datatable(escape = FALSE)
 ```
 
@@ -156,3 +161,6 @@ data_ready_calving_rsf_2h |>
   DT::datatable()
 ```
 
+# References
+
+GRASS Development Team. (2017). Geographic Resources Analysis Support System (GRASS GIS) Software, Version 7.8. Open Source Geospatial Foundation. http://grass.osgeo.org

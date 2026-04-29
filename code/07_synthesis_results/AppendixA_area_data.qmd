@@ -7,13 +7,21 @@ format:
     toc: true
     number-sections: true
     colorlinks: true
-  # html:
-  #   self-contained: true
-  #   toc: true
-  #   toc-depth: 4 # default is 3
-  #   toc-title: Contents
-  #   toc-location: left
-  #   number-sections: true
+    pdf-engine: pdflatex
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage{longtable}
+        \usepackage{booktabs}
+        \usepackage{array}
+        \usepackage{pdflscape}
+  html:
+    self-contained: true
+    toc: true
+    toc-depth: 4 # default is 3
+    toc-title: Contents
+    toc-location: left
+    number-sections: true
 editor: source
 bibliography: references.bib
 ---
@@ -23,9 +31,14 @@ library(readr)
 library(readxl)
 library(dplyr)
 library("DT") # Interactive HTML tables
+library(kableExtra) # Additional table formatting options
 library(terra)
 library(sf)
 library(tmap)
+library(glue)
+
+# Source helper functions for conditional HTML/PDF rendering
+source("../../R/quarto_helpers.R")
 ```
 
 In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind power plants on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we:
@@ -54,7 +67,7 @@ seasons |>
                 Summer = paste0(`Start Summer`, " to ", `End Summer`),
                 Autumn = paste0(`Start Autumn`, " to ", `End Autumn`)) |> 
   dplyr::select(Year, Phase, Calving:Autumn) |> 
-  DT::datatable()
+  make_table()
 ```
 
 <!-- # Availability areas -->
@@ -75,10 +88,9 @@ env_data <- readxl::read_xlsx("environmental_data.xlsx")
 #|
 
 env_data |> 
-  dplyr::mutate(Source = ifelse(is.na(Source) | Source == "Derived data", Source, paste0('<a href="', Source, '" target="_blank">', Source, '</a>'))) |>
-  DT::datatable(escape = FALSE)
+  make_links(url_columns = "Source") |>
+  make_table(escape = FALSE, landscape = TRUE, col_widths = c("3cm", "7cm", "1cm", "1cm", "2cm", "3cm", "3cm"))
 ```
-
 
 # Summary statistics of environmental variables
 
@@ -158,7 +170,7 @@ data_ready_calving_rsf_2h |>
   dplyr::rename(Proportion = 2) |>
   dplyr::bind_rows(lc_prop_grouped_prep) |>
   dplyr::rename("Average (range) or proportion" = 2) |> 
-  DT::datatable()
+  make_table()
 ```
 
 # References

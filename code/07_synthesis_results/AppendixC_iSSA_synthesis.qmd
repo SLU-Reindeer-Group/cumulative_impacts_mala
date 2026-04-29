@@ -2,7 +2,23 @@
 title: "Appendix C. Cumulative impacts of mining and wind power development on reindeer: habitat selection and movement at patch scale (integrated step selection analysis, iSSA)"
 author: ""
 #author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
+abstract: |
+  Here we provide supplementary information regarding the assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at the foraging patch scale and on movement parameters. We present, for each season: (i) the reindeer GPS data used for the analyses; (ii) the setup of the iSSA models; (iii) the best-ranged iSSA models; (iv) the model selection tables; (v) the tables of coefficients; (vi) figures illustrating the impacts of mining and wind turbines.
 format: 
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+    pdf-engine: pdflatex
+    keep-tex: false
+    include-in-header:
+      text: |
+        \usepackage{longtable}
+        \usepackage{booktabs}
+        \usepackage{array}
+        \usepackage{pdflscape}
+        \usepackage{caption}
+        \captionsetup[figure]{labelformat=empty}
   html:
     self-contained: true
     toc: true
@@ -18,19 +34,15 @@ bibliography: references.bib
 library(readr)
 library(dplyr)
 library("DT") # Interactive HTML tables
+library(kableExtra) # Additional table formatting options
 library(terra)
 library(sf)
 library(tmap)
+library(glue)
+
+# Source helper functions for conditional HTML/PDF rendering
+source("../../R/quarto_helpers.R")
 ```
-
-Here we provide supplementary information regarding the assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at the foraging patch scale and on movement parameters. We present, for each season:
-
-- the reindeer GPS data used for the analyses;
-- the setup of the iSSA models;
-- the best-ranged iSSA models;
-- the model selection tables;
-- the tables of coefficients;
-- figures illustrating the impacts of mining and wind turbines.
 
 # Table C1: GPS data used in the iSSA analysis
 
@@ -103,7 +115,8 @@ summ_data |>
                 Summer = paste0(`number individuals - summer`, " (", `n - summer`, ")"),
                 Autumn = paste0(`number individuals - autumn`, " (", `n - autumn`, ")")) |> 
   dplyr::select(Year, Phase, Calving, Summer, Autumn) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table()
 ```
 
 # Text C1: Statistical modeling of the iSSA
@@ -201,6 +214,12 @@ Summary of best ranked models:
 
 # Table C2: Model selection table in calving
 
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table C2 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
+
 ```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_calving
 #| fig-cap: "Table C2. Table of model selection for the iSSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
@@ -220,10 +239,17 @@ aic_calving |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
 ```
 
 # Table C3: Model selection table in summer
+
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table C3 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
 
 ```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_summer
@@ -245,10 +271,17 @@ aic_summer |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
 ```
 
 # Table C4: Model selection table in autumn
+
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table C4 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
 
 ```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_autumn
@@ -270,7 +303,8 @@ aic_autumn |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
 ```
 
 # Text C3: Disturbance effects on step selection
@@ -340,7 +374,8 @@ coef_all <- dplyr::tibble(season = c(rep("calving", nrow(coef_calving)),
   dplyr::arrange(term)
 
 coef_all |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table()
 ```
 
 # Table C6: Coefficients - calving
@@ -352,7 +387,8 @@ coef_all |>
 coef_calving |> 
   # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 # Table C7: Coefficients - summer
@@ -364,7 +400,8 @@ coef_calving |>
 coef_summer |> 
   # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 # Table C8: Coefficients - autumn
@@ -376,7 +413,8 @@ coef_summer |>
 coef_autumn |> 
   # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 <!-- # Figure C1: Impacts of wind power on habitat selection in calving during construction phase -->
@@ -413,4 +451,4 @@ coef_autumn |>
 
 ![Figure C5. Predicted distribution of step length (left) and turning angles (right) at different distances from where the wind turbines were built, during the construction phase (upper row) and operation phase (bottom row). The plot in the left also shows boxplots of predicted movement rates. Reindeer moved faster and more directionaly when close to wind turbines during their construction, but the different was minimal during operation.](../../output/ssf_results/ssf_calving_mov_all.png)
 
-
+# References

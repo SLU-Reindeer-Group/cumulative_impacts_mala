@@ -2,40 +2,50 @@
 title: "Appendix D. Cumulative impacts of mining and wind power development on reindeer: calving-site selection data and analysis"
 author: ""
 #author: Léonie Duris, Bernardo B. Niebuhr, Erik Cronvall, Moudud Alam, Per Sandström, Anna Skarin
+abstract: |
+  Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. We report: (i) the calving period and site identification; (ii) the statistical modeling of cumulative impact analysis; (iii) the model selection table; (iv) the analysis of calving site selection and forage quality.
 format: 
   pdf:
     toc: true
     number-sections: true
     colorlinks: true
-  # html:
-  #   self-contained: true
-  #   toc: true
-  #   toc-depth: 4 # default is 3
-  #   toc-title: Contents
-  #   toc-location: left
-  #   number-sections: true
+    pdf-engine: pdflatex
+    keep-tex: false
+    include-in-header:
+      text: |
+        \usepackage{longtable}
+        \usepackage{booktabs}
+        \usepackage{array}
+        \usepackage{pdflscape}
+        \usepackage{caption}
+        \captionsetup[figure]{labelformat=empty}
+  html:
+    self-contained: true
+    toc: true
+    toc-depth: 4 # default is 3
+    toc-title: Contents
+    toc-location: left
+    number-sections: true
 editor: source
-  markdown: 
-    wrap: 72
 bibliography: references.bib
 ---
 
-```{r setup, include=FALSE}
-
-
+```{r setup}
+#| include: FALSE
+#| echo: FALSE
+#| warning: FALSE
+#| message: FALSE
 library(dplyr)
 library("DT") # Interactive HTML tables
+library(kableExtra) # Additional table formatting options
 library(terra)
 library(sf)
 library(tmap)
+library(glue)
+
+# Source helper functions for conditional HTML/PDF rendering
+source("../../R/quarto_helpers.R")
 ```
-
-Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. We report:
-
--   the calving period and site identification;
--   the statistical modeling of cumulative impact analysis;
--   the model selection table;
--   the analysis of calving site selection and forage quality
 
 # Figure D1: Calving period and site identification
 
@@ -85,15 +95,16 @@ The terms `XXX`, and `TTT` in the model structure above represent scales or vari
 
 ```{r aic_calving, echo=FALSE, message=FALSE, warning=FALSE}
 #| label: aic_calving
+#| fig-cap: "Table D1. Table of model selection for the calving site selection model. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. The model to select is the model with ZOI = 10km and TPI = 250m."
 
-
-aic_calving <- readr::read_csv( "results/CSV/rsf_calving_AIC_table_complete.csv")[-2]
+aic_calving <- readr::read_csv("results/CSV/rsf_calving_AIC_table_complete.csv")[-2]
 
 aic_calving |> 
-  dplyr::slice(-1) |> 
+  dplyr::slice(-1) |>
   dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
-                tpi = sub("tpi_cat_s", "", tpi)) |> 
+                tpi = sub("tpi_cat_s", "", tpi)
+                ) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
   dplyr::select(-lc) |>
   dplyr::rename(`Mining ZOI radius` = 1,
@@ -101,23 +112,30 @@ aic_calving |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable(
-    caption = "Table D1. Table of model selection for the calving site selection model. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. The model to select is the model with ZOI = 10km and TPI = 250m")
+  # DT::datatable()
+  make_table(col_widths = c("2.5cm", "1cm", "1cm", "1cm", "8cm"))
 ```
 
 # Table D2: Final model results
 
 ```{r final_model, echo=FALSE, message=FALSE, warning=FALSE}
 #| label: coef_general
+#| fig-cap: "Table D2. Coefficient estimates of the most parsimonious generalized linear model testing the effect of infrastructures on reindeer calving site selection from the Malå reindeer herding community between 2008 and 2018. The table includes the estimates, the standard error (std.error) and the p-values (p)."
 
 # read calving
-
 coef_calving <- read.csv("results/CSV/rsf_calving_AIC_table_log2.csv", sep = ",", dec = ".")
 
-coef_calving[,-c(4,5,6)]|> 
-  DT::datatable(
-    caption = "Table D2. Summary of the most parsimonious generalized linear model testing the effect of infrastructures on reindeer calving site selection from the Malå reindeer herding community between 2008 and 2018. The table includes the estimates, the standard error (std.error) and the p-values (p)"
-  )
+coef_calving |> 
+  dplyr::mutate(significant = as.factor(if_else(p.value < 0.05, 1, 0)),
+                p = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
+                select = case_when(
+                  (estimate > 0 & grepl("log", term) & significant == 1) | (estimate < 0 & !grepl("log", term) & significant == 1) ~ "avoidance/negative",
+                  (estimate < 0 & grepl("log", term) & significant == 1) | (estimate > 0 & !grepl("log", term) & significant == 1) ~ "selection/positive",
+                  TRUE ~ "no effect"
+                )) |> 
+  dplyr::select(-c(statistic, significant, p.value)) |> 
+  # DT::datatable()
+  make_table()
 ```
 
 # Figure D2: Difference across years and phase in calving dates and between females that had been close to the wind turbines and those that had not
@@ -127,4 +145,5 @@ coef_calving[,-c(4,5,6)]|>
 # Figure D3: Synchrony between calving date and forage quality
 
 ![Figure D3. Distribution of the absolute difference in days between the maximum instantaneous rate of green up and the dates of calving at calving sites for the females that have been within 2km from the wind turbines during calving in Malå reindeer herding community for each year from 2008 to 2018. The colors represent the phase of construction of the wind turbines.](images/synchronyIRG.png)
+
 

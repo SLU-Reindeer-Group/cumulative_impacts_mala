@@ -1,0 +1,19 @@
+term,estimate,std.error,statistic,p.value,significant,p
+(Intercept),-4.786,1.739,-2.753,0.006,1,0.006
+scale(dem),-0.46,0.111,-4.142,0,1,<0.001
+I(scale(dem)^2),-0.3,0.093,-3.232,0.001,1,0.001
+scale(slope),-0.15,0.102,-1.461,0.144,0,0.144
+cos_aspect,0.183,0.114,1.608,0.108,0,0.108
+log(priv_road_dist + 1),0.325,0.089,3.667,0,1,<0.001
+log(public_road_dist + 1),0.303,0.088,3.443,0.001,1,<0.001
+tpi_s250m,0.085,0.03,2.818,0.005,1,0.005
+scale(mining_Krist_nearest10000),-1.38,0.411,-3.356,0.001,1,<0.001
+landcover_ccconiferous forests,0.132,1.076,0.122,0.903,0,0.903
+landcover_ccdeciduous forests,-0.503,1.141,-0.441,0.659,0,0.659
+landcover_ccmires,-0.433,1.093,-0.396,0.692,0,0.692
+landcover_ccopen area,0.803,1.073,0.748,0.454,0,0.454
+phaseConstruction,-0.898,1.882,-0.477,0.634,0,0.634
+phaseOperation,-1.827,1.732,-1.055,0.291,0,0.291
+log(wind_turbines_dist_comb + 1),-0.201,0.132,-1.518,0.129,0,0.129
+phaseConstruction:log(wind_turbines_dist_comb + 1),0.088,0.199,0.441,0.659,0,0.659
+phaseOperation:log(wind_turbines_dist_comb + 1),0.191,0.181,1.053,0.292,0,0.292

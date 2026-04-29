@@ -63,11 +63,17 @@
 #' @export
 make_table <- function(data, escape = TRUE, options = NULL, filter = "bottom",
                        font_size = 8, landscape = FALSE, 
-                       col_widths = NULL, ...) {
+                       col_widths = NULL, 
+                       truncate_lines_pdf = NULL, ...) {
   # Check if rendering to LaTeX/PDF
   if (.is_pdf_output()) {
     # Render as PDF table using kable with kableExtra styling
     # Full width + small font size helps tables fit on the page
+    
+    if(!is.null(truncate_lines_pdf)) {
+      data <- data |> 
+        slice(1:truncate_lines_pdf)
+    }
     
     table <- knitr::kable(data, format = "latex", 
                           booktabs = TRUE, 

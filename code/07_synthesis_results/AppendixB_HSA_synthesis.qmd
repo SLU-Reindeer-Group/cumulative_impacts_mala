@@ -2,7 +2,23 @@
 title: "Appendix B. Cumulative impacts of mining and wind power development on reindeer: landscape-scale habitat selection analysis (HSA)"
 author: ""
 #author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
+abstract: |
+  Here we provide supplementary information regarding the landscape-scale (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We present, for each season: (i) the setup of the habitat selection models; (ii) the best-ranged habitat selection models; (iii) the model selection tables; (iv) the tables of coefficients; (v) figures illustrating the impacts of mining and wind turbines; (vi) maps with the predicted habitat suitability and GPS data across the three wind power development phases.
 format: 
+  pdf:
+    toc: true
+    number-sections: true
+    colorlinks: true
+    pdf-engine: pdflatex
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage{longtable}
+        \usepackage{booktabs}
+        \usepackage{array}
+        \usepackage{pdflscape}
+        \usepackage{caption}
+        \captionsetup[figure]{labelformat=empty}
   html:
     self-contained: true
     toc: true
@@ -18,19 +34,24 @@ bibliography: references.bib
 library(readr)
 library(dplyr)
 library("DT") # Interactive HTML tables
+library(kableExtra) # Additional table formatting options
 library(terra)
 library(sf)
 library(tmap)
+library(glue)
+
+# Source helper functions for conditional HTML/PDF rendering
+source("../../R/quarto_helpers.R")
 ```
 
-Here we provide supplementary information regarding the landscape-scale (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We present, for each season:
+<!-- Here we provide supplementary information regarding the landscape-scale (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. We present, for each season: -->
 
-- the setup of the habitat selection models;
-- the best-ranged habitat selection models;
-- the model selection tables;
-- the tables of coefficients;
-- figures illustrating the impacts of mining and wind turbines;
-- maps with the predicted habitat suitability and GPS data across the three wind power development phases.
+<!-- - the setup of the habitat selection models; -->
+<!-- - the best-ranged habitat selection models; -->
+<!-- - the model selection tables; -->
+<!-- - the tables of coefficients; -->
+<!-- - figures illustrating the impacts of mining and wind turbines; -->
+<!-- - maps with the predicted habitat suitability and GPS data across the three wind power development phases. -->
 
 # Text B1: Statistical modeling of the HSA
 
@@ -121,6 +142,12 @@ Summary of best ranked models:
 <!-- at large scales, which does not include any support to the hypothesis of cumulative impacts of multiple  -->
 <!-- wind turbines or parks during calving. All the best ranking models support a large ZOI radius for both the mine (10 km) and the wind turbines (5-10 km). -->
 
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table B1 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
+
 ```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_calving
 #| fig-cap: "Table B1. Table of model selection for the HSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure."
@@ -139,7 +166,8 @@ aic_calving |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "7.5cm"))
 ```
 
 # Table B2: Model selection table in summer
@@ -153,6 +181,12 @@ aic_calving |>
 <!-- on summer. -->
 <!-- All the best ranking models support a large ZOI radius for both the mine (5 - 10 km) and  -->
 <!-- the wind turbines (5-10 km). -->
+
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table B2 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
 
 ```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_summer
@@ -172,7 +206,8 @@ aic_summer |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "7.5cm"))
 
 # aic_summer |> 
 #   dplyr::slice(1:15)
@@ -188,6 +223,12 @@ aic_summer |>
 <!-- of the zone of influence of the nearest wind turbine at 10km radius. There was no evidence of cumulative impacts of multiple wind turbines autumn.  -->
 <!-- All the best ranking models show evidence of a large ZOI radius for both the mine (10 km) and  -->
 <!-- the wind turbines (5-10 km). -->
+
+```{r}
+#| results: asis
+#| echo: false
+if (.is_pdf_output()) cat("Table B3 was truncated to show only the first 10 models, to avoid an overly long table.")
+```
 
 ```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_autumn
@@ -207,7 +248,8 @@ aic_autumn |>
                 TPI = tpi,
                 AIC = aic,
                 formula = definition) |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "7.5cm"))
 ```
 
 # Text B3: Disturbance effects on habitat selection
@@ -274,7 +316,8 @@ coef_all <- dplyr::tibble(season = c(rep("calving", nrow(coef_calving)),
   dplyr::arrange(term)
 
 coef_all |> 
-  DT::datatable()
+  # DT::datatable()
+  make_table()
 ```
 
 # Table B5: Coefficients - calving
@@ -285,7 +328,8 @@ coef_all |>
  
 coef_calving |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 # Table B6: Coefficients - summer
@@ -296,7 +340,8 @@ coef_calving |>
 
 coef_summer |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 # Table B7: Coefficients - autumn
@@ -307,7 +352,8 @@ coef_summer |>
 
 coef_autumn |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
-  DT::datatable()
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
 # Figure B2: Impacts of mining on habitat selection in calving

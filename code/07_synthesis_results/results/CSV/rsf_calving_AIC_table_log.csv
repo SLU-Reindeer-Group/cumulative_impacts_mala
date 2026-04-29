@@ -1,0 +1,26 @@
+term,estimate,std.error,statistic,p.value,significant,p
+(Intercept),-7.115,3.926,-1.812,0.07,0,0.07
+scale(dem),-0.195,0.144,-1.35,0.177,0,0.177
+I(scale(dem)^2),-0.219,0.107,-2.046,0.041,1,0.041
+log(public_road_dist + 1),0.243,0.091,2.666,0.008,1,0.008
+log(mining_dist_Krist + 1),1.289,0.326,3.951,0,1,<0.001
+wf_namestorliden,0.352,0.272,1.292,0.196,0,0.196
+wf_nameytteberg,0.08,0.326,0.245,0.807,0,0.807
+wf_nameamliden,-1.629,0.582,-2.801,0.005,1,0.005
+viewshed_lcin sight open,-11.691,5.032,-2.323,0.02,1,0.02
+viewshed_lcin sight cover,-13.763,5.301,-2.596,0.009,1,0.009
+phaseConstruction,5.705,4.714,1.21,0.226,0,0.226
+phaseOperation,-8.105,5.389,-1.504,0.133,0,0.133
+log(wind_turbines_dist_comb + 1),-1.011,0.381,-2.657,0.008,1,0.008
+viewshed_lcin sight open:phaseConstruction,-10.942,7.433,-1.472,0.141,0,0.141
+viewshed_lcin sight cover:phaseConstruction,-13.464,9.01,-1.494,0.135,0,0.135
+viewshed_lcin sight open:phaseOperation,8.416,7.351,1.145,0.252,0,0.252
+viewshed_lcin sight cover:phaseOperation,0.194,8.182,0.024,0.981,0,0.981
+viewshed_lcin sight open:log(wind_turbines_dist_comb + 1),1.276,0.537,2.379,0.017,1,0.017
+viewshed_lcin sight cover:log(wind_turbines_dist_comb + 1),1.516,0.567,2.673,0.008,1,0.008
+phaseConstruction:log(wind_turbines_dist_comb + 1),-0.589,0.472,-1.246,0.213,0,0.213
+phaseOperation:log(wind_turbines_dist_comb + 1),0.794,0.532,1.493,0.135,0,0.135
+viewshed_lcin sight open:phaseConstruction:log(wind_turbines_dist_comb + 1),1.227,0.795,1.543,0.123,0,0.123
+viewshed_lcin sight cover:phaseConstruction:log(wind_turbines_dist_comb + 1),1.423,0.971,1.465,0.143,0,0.143
+viewshed_lcin sight open:phaseOperation:log(wind_turbines_dist_comb + 1),-0.786,0.774,-1.015,0.31,0,0.31
+viewshed_lcin sight cover:phaseOperation:log(wind_turbines_dist_comb + 1),0.08,0.868,0.092,0.927,0,0.927

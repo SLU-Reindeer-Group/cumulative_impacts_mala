@@ -116,13 +116,14 @@ make_table <- function(data, escape = TRUE, options = NULL, filter = "bottom",
 #' Convert URLs to Format-Specific Link Format
 #'
 #' Converts URLs in a data frame to clickable hyperlinks. For HTML output,
-#' creates anchor tags. For PDF output, creates LaTeX \href{} commands.
+#' creates anchor tags with full URLs. For PDF output, creates LaTeX \href{} 
+#' commands with shortened display text (domain only) to prevent overflow.
 #'
 #' @param data A data frame or tibble
 #' @param url_columns Character vector of column names containing URLs.
 #'                    Can be a single column name or multiple.
 #' @param link_text Optional character vector with display text for links.
-#'                  If NULL, uses the URL text itself. Can be a column name.
+#'                  If NULL, uses the URL text itself for HTML, domain only for PDF.
 #'
 #' @return Modified data frame with URLs converted to appropriate link format
 #'
@@ -148,16 +149,55 @@ make_links <- function(data, url_columns, link_text = NULL) {
     urls <- data[[col]]
 
     if (.is_pdf_output()) {
-      # For PDF: create LaTeX \href commands
-      data[[col]] <- ifelse(
-        is.na(urls) | urls == "",
-        urls,
-        paste0('\\href{', urls, '}{', urls, '}')
-      )
+      # For PDF: replace URLs with numbered references [1], [2], etc.
+      # Initialize the global reference list if it doesn't exist
+      if (!exists(".quarto_links_references", where = .GlobalEnv)) {
+        .GlobalEnv$.quarto_links_references <- list()
+      }
+      
+      # Process each URL
+      new_values <- character(length(urls))
+      for (i in seq_along(urls)) {
+        url <- urls[i]
+        
+        # Skip NA, empty, or "Derived data" entries
+        if (is.na(url) | url == "" | url == "Derived data") {
+          new_values[i] <- url
+          next
+        }
+        
+        # Check if URL already exists in reference list
+        ref_list <- .GlobalEnv$.quarto_links_references
+        existing_idx <- NULL
+        
+        if (length(ref_list) > 0) {
+          for (j in seq_along(ref_list)) {
+            if (identical(ref_list[[j]]$url, url)) {
+              existing_idx <- j
+              break
+            }
+          }
+        }
+        
+        if (!is.null(existing_idx)) {
+          # URL already exists, reuse its number
+          ref_num <- existing_idx
+        } else {
+          # New URL, add to reference list
+          ref_num <- length(ref_list) + 1
+          ref_list[[ref_num]] <- list(url = url, number = ref_num)
+          .GlobalEnv$.quarto_links_references <- ref_list
+        }
+        
+        # Store the numbered reference
+        new_values[i] <- paste0("[", ref_num, "]")
+      }
+      
+      data[[col]] <- new_values
     } else {
       # For HTML and other formats: create anchor tags
       data[[col]] <- ifelse(
-        is.na(urls) | urls == "",
+        is.na(urls) | urls == "" | urls == "Derived data",
         urls,
         paste0('<a href="', urls, '" target="_blank">', urls, '</a>')
       )
@@ -207,4 +247,51 @@ pdf_only <- function(expr) {
   if (.is_pdf_output()) {
     expr
   }
+}
+
+#' Print Link References
+#'
+#' Outputs a formatted reference section with all the numbered links used in the document.
+#' This function should be called at the end of the document, after all tables with links.
+#' Only outputs in PDF format; does nothing for HTML output.
+#'
+#' @return NULL (invisible). Outputs formatted reference section to the document.
+#'
+#' @examples
+#' \dontrun{
+#' # In a Quarto document, after using make_links():
+#' print_link_references()
+#' }
+#'
+#' @export
+print_link_references <- function(section_title = "Data source references") {
+  # Only print references for PDF output
+  if (!.is_pdf_output()) {
+    return(invisible(NULL))
+  }
+  
+  # Check if references exist
+  if (!exists(".quarto_links_references", where = .GlobalEnv) || 
+      length(.GlobalEnv$.quarto_links_references) == 0) {
+    return(invisible(NULL))
+  }
+  
+  ref_list <- .GlobalEnv$.quarto_links_references
+  
+  # Create output
+  cat(paste0("\n# ", section_title, "\n\n"))
+  
+  for (i in seq_along(ref_list)) {
+    url <- ref_list[[i]]$url
+    # url_short <- url |> 
+    #   strsplit(split = "/") |> 
+    #   dplyr::first() |> dplyr::last()
+    # cat(sprintf("[%d] [%s](%s)\n\n", i, url_short, url))
+    cat(sprintf("[%d] %s\n\n", i, url))
+  }
+  
+  # Clear the reference list after printing
+  .GlobalEnv$.quarto_links_references <- list()
+  
+  return(invisible(NULL))
 }

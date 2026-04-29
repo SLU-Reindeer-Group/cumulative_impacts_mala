@@ -2,6 +2,8 @@
 title: "Appendix A. Study area details and environmental data sources"
 author: ""
 #author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
+abstract: |
+  In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind power plants on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we: (i) detail the definition of the seasons in each year for which we used GPS data; (ii) describe all the environmental data used in the study, pointing to sources, geographical information, thematic resolution, and details on the processing and preparation of the data layers; (iii) present a summary statistics of the values for the environmental variables for the study area. 
 format: 
   pdf:
     toc: true
@@ -41,12 +43,12 @@ library(glue)
 source("../../R/quarto_helpers.R")
 ```
 
-In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind power plants on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we:
+<!-- In this document we provide details on the study area and sources of environmental data used to analyze the cumulative impacts of a mine and wind power plants on reindeer in the Malå Sámi reindeer herding community (RHC) in Northern Sweden. More specifically, we: -->
 
-- Detail the definition of the seasons in each year for which we used GPS data;
+<!-- - Detail the definition of the seasons in each year for which we used GPS data; -->
 <!-- - Present and describe the availability areas in each of the seasons;  -->
-- Describe all the environmental data used in the study, pointing to sources, geographical information, thematic resolution, and details on the processing and preparation of the data layers;
-- Present a summary statistics of the values for the environmental variables for the study area. 
+<!-- - Describe all the environmental data used in the study, pointing to sources, geographical information, thematic resolution, and details on the processing and preparation of the data layers; -->
+<!-- - Present a summary statistics of the values for the environmental variables for the study area.  -->
 
 # Seasons
 
@@ -89,7 +91,7 @@ env_data <- readxl::read_xlsx("environmental_data.xlsx")
 
 env_data |> 
   make_links(url_columns = "Source") |>
-  make_table(escape = FALSE, landscape = TRUE, col_widths = c("3cm", "7cm", "1cm", "1cm", "2cm", "3cm", "3cm"))
+  make_table(escape = FALSE, landscape = TRUE, col_widths = c("2.5cm", "8.5cm", "1cm", "1cm", "1.5cm", "2.5cm", "0.5cm"))
 ```
 
 # Summary statistics of environmental variables
@@ -171,6 +173,14 @@ data_ready_calving_rsf_2h |>
   dplyr::bind_rows(lc_prop_grouped_prep) |>
   dplyr::rename("Average (range) or proportion" = 2) |> 
   make_table()
+```
+
+
+```{r}
+#| echo: false
+#| results: asis
+source("../../R/quarto_helpers.R")
+print_link_references()
 ```
 
 # References

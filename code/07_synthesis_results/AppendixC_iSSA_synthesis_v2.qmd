@@ -3,7 +3,7 @@ title: "Appendix C. Cumulative impacts of mining and wind power development on r
 author: ""
 #author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 abstract: |
-  Here we provide supplementary information regarding the assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at the foraging patch scale and on movement parameters. We present, for each season: (i) the reindeer GPS data used for the analyses; (ii) the setup of the iSSA models; (iii) the best-ranged iSSA models; (iv) the model selection tables; (v) the tables of coefficients; (vi) figures illustrating the impacts of mining and wind turbines.
+  Here we provide supplementary information regarding the assessment of reindeer habitat selection for grazing sites and movement patterns in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. The analysis consisted of an integrated step-selection analysis [iSSA; @avgar_integrated_2016] to simultaneously quantify effects on habitat selection at the foraging patch scale and on movement parameters. Taking into account different zone of influence (ZOI) radii for mining, different ZOI types (density vs. nearest) and radii for wind turbines, and different scales for the terrain position index, we fitted a total of 294 models for each season and compared them through model selection procedures. Here we present, for each season: (i) the reindeer GPS data used for the analyses; (ii) the setup of the iSSA models; (iii) the best-ranked iSSA models; (iv) the model selection tables comparing the structure and likelihood of the different models; (v) the tables of coefficients; (vi) figures illustrating the impacts of mining and wind turbines.
 format: 
   pdf:
     toc: true
@@ -98,13 +98,13 @@ summ_data <- summ_calving_year |>
   dplyr::left_join(
     summ_summer_year |> 
       dplyr::rename(`n - summer` = n,
-                `number individuals - summer` = n_ind),
+                    `number individuals - summer` = n_ind),
     by = "year"
   ) |> 
   dplyr::left_join(
     summ_autumn_year |> 
       dplyr::rename(`n - autumn` = n,
-                `number individuals - autumn` = n_ind),
+                    `number individuals - autumn` = n_ind),
     by = "year"
   ) |> 
   dplyr::rename(Year = year) |> 
@@ -125,31 +125,31 @@ As described in the main text, the patch-scale habitat selection analysis follow
 
 ```{r}
 base_formula <- case_ ~ strata(step_id_) +
-  # movement
-  sl_ + log_sl + cos_ta +
-  wind_turbines_YYY_start_construction_scaled:(sl_ + log_sl + cos_ta) +
-  wind_turbines_ZZZ_start_operation_scaled:(sl_ + log_sl + cos_ta) +
-  landcover_start:(sl_ + log_sl + cos_ta) +
-  # habitat selection
-  dem_end_scaled + I(dem_end_scaled^2) + slope_end_scaled +
-  sos_end_scaled +
-  log_power_lines_dist_end + log_priv_road_dist_end + log_public_road_dist_end +
-  log_house_dist_end + 
-  landcover_end +
-  # minig habitat selection
-  mining_Krist_nearestXXX_end_scaled + 
-  # wind habitat selection
-  wf_name_end +
-  wind_turbines_YYY_end_construction_scaled +
-  wind_turbines_ZZZ_end_operation_scaled +
-  landcover_end:wind_turbines_YYY_end_construction_scaled +
-  landcover_end:wind_turbines_ZZZ_end_operation_scaled +
-  # tpi habitat selection
-  tpi_scale_TTT +
-  # barriers to movement (along the steps)
-  public_road_nearest100_cross +
-  wind_turbines_nearest500_cross_construction +
-  wind_turbines_nearest500_cross_operation
+# movement
+sl_ + log_sl + cos_ta +
+wind_turbines_YYY_start_construction_scaled:(sl_ + log_sl + cos_ta) +
+wind_turbines_ZZZ_start_operation_scaled:(sl_ + log_sl + cos_ta) +
+landcover_start:(sl_ + log_sl + cos_ta) +
+# habitat selection
+dem_end_scaled + I(dem_end_scaled^2) + slope_end_scaled +
+sos_end_scaled +
+log_power_lines_dist_end + log_priv_road_dist_end + log_public_road_dist_end +
+log_house_dist_end + 
+landcover_end +
+# minig habitat selection
+mining_Krist_nearestXXX_end_scaled + 
+# wind habitat selection
+wf_name_end +
+wind_turbines_YYY_end_construction_scaled +
+wind_turbines_ZZZ_end_operation_scaled +
+landcover_end:wind_turbines_YYY_end_construction_scaled +
+landcover_end:wind_turbines_ZZZ_end_operation_scaled +
+# tpi habitat selection
+tpi_scale_TTT +
+# barriers to movement (along the steps)
+public_road_nearest100_cross +
+wind_turbines_nearest500_cross_construction +
+wind_turbines_nearest500_cross_operation
 ```
 
 where:
@@ -169,7 +169,8 @@ where:
 - `sl_`, `log_sl` and `cos_ta`: movement parameters (step length, log(step length), and cosine of the turning angle, respectively). 
 - `wind_turbines_YYY_end_construction` and `wind_turbines_YYY_end_operation`: variables representing the ZOI of wind turbines. These variables assume a value equal to the wind turbine influence (density or nearest, with a corresponding ZOI radius) at the construction and operation phases, respectively, and were zero for other development phases;
 - `public_road_nearest100_cross`: binary variable (0/1) representing whether a certain step crossed or not a public road;
-- `wind_turbines_nearest500_cross_construction` and `wind_turbines_nearest500_cross_operation`: binary variables (0/1) representing whether a certain step crossed or not a buffer of 500 m around any wind turbines, during construction and operation.
+- `wind_turbines_nearest500_cross_construction` and  
+`wind_turbines_nearest500_cross_operation`: binary variables (0/1) representing whether a certain step crossed or not a buffer of 500 m around any wind turbines, during construction and operation.
 
 The model structure contains the movement parameters, including its interaction with the effects of land cover and wind turbines; habitat selection considering the effects of wind turbines in each phase (construction, operation) in interaction with land cover; and main effects of other infrastructure and landscape variables. 
 
@@ -179,6 +180,8 @@ The terms `XXX`, `YYY`, `ZZZ`, and `TTT` in the model structure above represent 
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - TPI: 150 m, 250 m, 510 m.
 
+All fixed terms are shared across models, and only the mine ZOI, the wind ZOI type and radius, and TPI scale varied. Consequently, all models had the same number of parameters. This combination of possible variables resulted in a total of 294 models tested and compared for each season. Models were built with data of all individuals pooled.
+
 # Text C2: Best-ranked integrated step-selection models
 
 This is the structure of the best-ranked iSSA model selected for each season. 
@@ -186,17 +189,20 @@ This is the structure of the best-ranked iSSA model selected for each season.
 ```{r, echo=FALSE, warning=FALSE}
 # calving
 load("../../output/ssf_calving_multi_zoi_table_landcover_cross.rda")
-tab_models_calving <- tab_models
+tab_models_calving <- tab_models |> 
+  dplyr::filter(!grepl("log", mining)) 
 form_calving <- tab_models_calving$definition[1] |> 
   gsub(pattern = "\n   ", replacement = "")
 # summer
 load("../../output/ssf_summer_multi_zoi_table_landcover_cross.rda")
-tab_models_summer <- tab_models
+tab_models_summer <- tab_models |> 
+  dplyr::filter(!grepl("log", mining)) 
 form_summer <- tab_models_summer$definition[3] |> # here we use 3 which is the most conservative
   gsub(pattern = "\n   ", replacement = "")
 # autumn
 load("../../output/ssf_autumn_multi_zoi_table_landcover_cross.rda")
-tab_models_autumn <- tab_models
+tab_models_autumn <- tab_models |> 
+  dplyr::filter(!grepl("log", mining)) 
 form_autumn <- tab_models_autumn$definition[1] |> 
   gsub(pattern = "\n   ", replacement = "")
 ```
@@ -204,43 +210,51 @@ form_autumn <- tab_models_autumn$definition[1] |>
 Summary of best ranked models:
 
 -   **Calving. Cumulative impact of wind turbines, ZOI radius = 5 km; no significant effect of the mine:** \
-    `{r} paste(form_calving)`
+`{r} paste(form_calving)`
 
--   **Summer. ZOI of the nearest wind turbine, radius = 5 km; ZOI of the mine with radius 10 km:**\
-    `{r} paste(form_summer)`
+-   **Summer. ZOI of the nearest wind turbine, radius = 5-10 km; ZOI of the mine with radius 5-10 km. We select for interpretation, visualization, and discussion the model with the smaller ZOI radii estimated, among those equally plausible (dAIC < 2):**\
+`{r} paste(form_summer)`
 
 -   **Autumn. Cumulative ZOI of wind turbines, radius = 10km; no significant effect of the mine:** \
-    `{r} paste(form_autumn)`
+`{r} paste(form_autumn)`
 
 # Table C2: Model selection table in calving
 
 ```{r}
 #| results: asis
 #| echo: false
-if (.is_pdf_output()) cat("Table C2 was truncated to show only the first 10 models, to avoid an overly long table.")
+if (.is_pdf_output()) cat("Table C2 was truncated to show only the first 10 models, to avoid an overly long table. Two models had dAIC (difference in AIC) smaller than two from the best ranked model. The first ommited model had dAIC = 23.31 in comparison with the best-ranked model. The cumulative Akaike weights of the ten top models was 99.998%.")
 ```
 
 ```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_calving
-#| fig-cap: "Table C2. Table of model selection for the iSSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
+#| fig-cap: "Table C2. Table of model selection for the iSSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
 
 # aic_calving <- readr::read_csv("../../output/ssf_results/ssf_calving_AIC_table_complete.csv")
 aic_calving <- tab_models_calving
 
 aic_calving |> 
-  # dplyr::slice(-grep("log", mining)) |> 
-  dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
+  dplyr::filter(!grepl("log", mining)) |> 
+  dplyr::mutate(dAIC = aic - min(aic),
+                rel_likelihood = exp(-0.5 * dAIC),
+                akaike_weights = rel_likelihood / sum(rel_likelihood),
+                akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", round(akaike_weights, digits = 4)),
+                cumulative_akaike_weights = round(cumsum(akaike_weights), digits = 4),
+                dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
-                tpi = sub("tpi_cat_s", "", tpi)) |> 
+                tpi = sub("tpi_cat_s", "", tpi),
+                tpi = sub("_end", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-lc) |>
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
                 AIC = aic,
+                `Akaike weights` = akaike_weights_text,
+                `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
 ```
 
 # Table C3: Model selection table in summer
@@ -248,31 +262,38 @@ aic_calving |>
 ```{r}
 #| results: asis
 #| echo: false
-if (.is_pdf_output()) cat("Table C3 was truncated to show only the first 10 models, to avoid an overly long table.")
+if (.is_pdf_output()) cat("Table C3 was truncated to show only the first 10 models, to avoid an overly long table. Two models had dAIC (difference in AIC) smaller than two from the best ranked model. Among these models with dAIC < 2, we selected for the analysis in the main manuscript the one with the smaller ZOI radius, but we also discuss the variation across the best-ranked models. The first ommited model had dAIC = 10.05 in comparison with the best-ranked model. The cumulative Akaike weights of the ten top models was 98.265%.")
 ```
 
 ```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_summer
-#| fig-cap: "Table C3. Table of model selection for the iSSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine. Here, we selected model ranked number 3 as the most parsimonious, because delta AIC < 2 in relation to the best ranked model and we chose to be more conservative, i.e. to select the smallest ZOI radii."
+#| fig-cap: "Table C3. Table of model selection for the iSSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine. Here, we selected model ranked number 3 as the most parsimonious, because delta AIC < 2 in relation to the best ranked model and we chose to be more conservative, i.e. to select the smallest ZOI radii."
 
 # aic_summer <- readr::read_csv("../../output/ssf_results/ssf_summer_AIC_table_complete.csv")
 aic_summer <- tab_models_summer
 
 aic_summer |> 
-  # dplyr::slice(-grep("log", mining)) |> 
-  dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
+  dplyr::filter(!grepl("log", mining)) |> 
+  dplyr::mutate(dAIC = aic - min(aic),
+                rel_likelihood = exp(-0.5 * dAIC),
+                akaike_weights = rel_likelihood / sum(rel_likelihood),
+                akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", round(akaike_weights, digits = 4)),
+                cumulative_akaike_weights = round(cumsum(akaike_weights), digits = 4),
+                dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi),
                 tpi = sub("_end", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-lc) |>
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
                 AIC = aic,
+                `Akaike weights` = akaike_weights_text,
+                `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
 ```
 
 # Table C4: Model selection table in autumn
@@ -280,31 +301,38 @@ aic_summer |>
 ```{r}
 #| results: asis
 #| echo: false
-if (.is_pdf_output()) cat("Table C4 was truncated to show only the first 10 models, to avoid an overly long table.")
+if (.is_pdf_output()) cat("Table C4 was truncated to show only the first 10 models, to avoid an overly long table. Seven models had dAIC (difference in AIC) smaller than two from the best ranked model. Among these models, coefficient estimates are relatively similar; despite there being variation in the estimated ZOI of the mining, the mining term in not significant in any of the models. The first ommited model had dAIC = 10.63 in comparison with the best-ranked model. The cumulative Akaike weights of the ten top models was 99.66%.")
 ```
 
 ```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_autumn
-#| fig-cap: "Table C4. Table of model selection for the iSSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
+#| fig-cap: "Table C4. Table of model selection for the iSSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure. For impact of wind turbines, cumulative represents the density of turbines, and nearest represents the distance-decay ZOI of the nearest turbine."
 
 # aic_autumn <- readr::read_csv("../../output/ssf_results/ssf_autumn_AIC_table_complete.csv")
 aic_autumn <- tab_models_autumn
 
 aic_autumn |> 
-  dplyr::slice(-grep("log", mining)) |> 
-  dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
+  dplyr::filter(!grepl("log", mining)) |> 
+  dplyr::mutate(dAIC = aic - min(aic),
+                rel_likelihood = exp(-0.5 * dAIC),
+                akaike_weights = rel_likelihood / sum(rel_likelihood),
+                akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", round(akaike_weights, digits = 4)),
+                cumulative_akaike_weights = round(cumsum(akaike_weights), digits = 4),
+                dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi),
                 tpi = sub("_end", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-lc) |>
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
                 AIC = aic,
+                `Akaike weights` = akaike_weights_text,
+                `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("2cm", "2cm", "1cm", "1cm", "1cm", "8cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
 ```
 
 # Text C3: Disturbance effects on step selection
@@ -364,8 +392,8 @@ coef_autumn <- readr::read_csv("../../output/ssf_results/ssf_autumn_coef_table_.
                 ))
 
 coef_all <- dplyr::tibble(season = c(rep("calving", nrow(coef_calving)), 
-                          rep("summer", nrow(coef_summer)),
-                          rep("autumn", nrow(coef_autumn)))) |> 
+                                     rep("summer", nrow(coef_summer)),
+                                     rep("autumn", nrow(coef_autumn)))) |> 
   cbind(
     dplyr::bind_rows(coef_calving, coef_summer, coef_autumn)) |> 
   dplyr::filter(grepl("log|nearest|sos|eos", term)) |> 
@@ -383,7 +411,7 @@ coef_all |>
 ```{r, echo=FALSE}
 #| label: coef_calving
 #| fig-cap: "Table C6. Complete table with coefficient estimates for the best-ranked integrated step selection model in calving."
- 
+
 coef_calving |> 
   # dplyr::filter(!grepl("sl\\_|log_sl|ta", term)) |> 
   dplyr::select(-c(statistic, significant, p.value)) |>

@@ -3,7 +3,7 @@ title: "Appendix D. Cumulative impacts of mining and wind power development on r
 author: ""
 #author: Léonie Duris, Bernardo B. Niebuhr, Erik Cronvall, Moudud Alam, Per Sandström, Anna Skarin
 abstract: |
-  Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. We report: (i) the calving period and site identification; (ii) the statistical modeling of cumulative impact analysis; (iii) the model selection table; (iv) the analysis of calving site selection and forage quality.
+  Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. Taking into account different zone of influence (ZOI) radii for mining and different scales for the terrain position index, we fitted a total of 21 candidate models for calving-site selection for each season and compared them through model selection procedures. We report: (i) the calving period and site identification; (ii) the statistical modeling of cumulative impact analysis; (iii) the model selection table comparing the structure and likelihood of the different models; (iv) the analysis of calving site selection and forage quality.
 format: 
   pdf:
     toc: true
@@ -40,6 +40,7 @@ library("DT") # Interactive HTML tables
 library(kableExtra) # Additional table formatting options
 library(terra)
 library(sf)
+library(readr)
 library(tmap)
 library(glue)
 
@@ -91,29 +92,38 @@ The terms `XXX`, and `TTT` in the model structure above represent scales or vari
 -   Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 -   TPI (`TTT`): 150 m, 250 m, 510 m.
 
+All fixed terms are shared across models, and only the mine ZOI and TPI scale varied. Consequently, all models had the same number of parameters. This combination of possible variables resulted in a total of 21 models tested and compared. Models were built with data of all individuals pooled.
+
 # Table D1: Model selection table in calving sites
 
 ```{r aic_calving, echo=FALSE, message=FALSE, warning=FALSE}
 #| label: aic_calving
-#| fig-cap: "Table D1. Table of model selection for the calving site selection model. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. The model to select is the model with ZOI = 10km and TPI = 250m."
+#| fig-cap: "Table D1. Table of model selection for the calving site selection model. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, and the formula with each model's structure. The best-ranked model includes the variables mining ZOI = 10km and TPI = 250m."
 
 aic_calving <- readr::read_csv("results/CSV/rsf_calving_AIC_table_complete.csv")[-2]
 
 aic_calving |> 
-  dplyr::slice(-1) |>
-  dplyr::mutate(dAIC = round(dAIC - dAIC[1], digits = 2),
+  dplyr::filter(!grepl("log", mining)) |>
+  dplyr::mutate(dAIC = aic - min(aic),
+                rel_likelihood = exp(-0.5 * dAIC),
+                akaike_weights = rel_likelihood / sum(rel_likelihood),
+                akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", round(akaike_weights, digits = 4)),
+                cumulative_akaike_weights = round(cumsum(akaike_weights), digits = 4),
+                dAIC = round(dAIC - dAIC[1], digits = 2),
                 aic = round(aic, digits = 2),
-                tpi = sub("tpi_cat_s", "", tpi)
-                ) |> 
+                tpi = sub("tpi_s", "", tpi),
+                tpi = sub("_end", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-lc) |>
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
                 AIC = aic,
+                `Akaike weights` = akaike_weights_text,
+                `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(col_widths = c("2.5cm", "1cm", "1cm", "1cm", "8cm"))
+  make_table(col_widths = c("1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
 ```
 
 # Table D2: Final model results

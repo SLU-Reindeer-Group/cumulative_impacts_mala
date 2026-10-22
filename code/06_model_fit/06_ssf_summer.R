@@ -332,7 +332,7 @@ for(i in scals) {
     dplyr::mutate(dAIC = abs(aic - min(aic))) |>
     dplyr::arrange(dAIC))
 
-save(tab_models, file = "output/ssf_summer_multi_zoi_table_landcover_cross.rda")
+# save(tab_models, file = "output/ssf_summer_multi_zoi_table_landcover_cross.rda")
 load("output/ssf_summer_multi_zoi_table_landcover_cross.rda")
 tab_models
 
@@ -1163,3 +1163,210 @@ combined_all
 ggsave(filename = "output/ssf_results/ssf_summer_mov_all.png", combined_all, 
        width = 25, height = 25, units = "cm", dpi = 300)
 
+
+#----------------------------------------------------
+# vif
+
+within_gvif_issf <- function(formula, data, strata_var = "step_id_",
+                             tol = 1e-10) {
+  
+  # ------------------------------------------------------------
+  # 1. Get model terms and remove strata()
+  # ------------------------------------------------------------
+  
+  tt <- terms(formula, specials = "strata")
+  term_labels_all <- attr(tt, "term.labels")
+  
+  is_strata <- grepl("^strata\\s*\\(", term_labels_all)
+  
+  term_labels_x <- term_labels_all[!is_strata]
+  
+  # Formula containing predictors only
+  form_x <- reformulate(term_labels_x)
+  
+  
+  # ------------------------------------------------------------
+  # 2. Build model frame and remove rows with missing values
+  # ------------------------------------------------------------
+  
+  mf <- model.frame(
+    form_x,
+    data = data,
+    na.action = na.pass
+  )
+  
+  ok <- complete.cases(mf) & !is.na(data[[strata_var]])
+  
+  if (any(!ok)) {
+    message(sum(!ok), " rows removed because of missing values.")
+  }
+  
+  
+  # ------------------------------------------------------------
+  # 3. Create exact design matrix
+  #
+  # This automatically expands:
+  #   - factors
+  #   - interactions
+  #   - I(x^2)
+  #   - etc.
+  # ------------------------------------------------------------
+  
+  X0 <- model.matrix(
+    form_x,
+    data = data[ok, , drop = FALSE]
+  )
+  
+  assign0 <- attr(X0, "assign")
+  term_labels <- attr(terms(form_x), "term.labels")
+  
+  
+  # Remove ordinary intercept
+  keep <- colnames(X0) != "(Intercept)"
+  
+  X <- X0[, keep, drop = FALSE]
+  assign <- assign0[keep]
+  
+  
+  # ------------------------------------------------------------
+  # 4. Demean each design-matrix column within step_id_
+  #
+  # This removes between-stratum variation and retains the
+  # variation available to the conditional logistic model.
+  # ------------------------------------------------------------
+  
+  strata <- data[[strata_var]][ok]
+  
+  # Integer ID for each stratum
+  g <- match(strata, unique(strata))
+  
+  n_g <- tabulate(g)
+  
+  # Sum each column within stratum
+  group_sum <- rowsum(
+    X,
+    group = g,
+    reorder = TRUE
+  )
+  
+  # Convert sums to means
+  group_mean <- sweep(
+    group_sum,
+    MARGIN = 1,
+    STATS = n_g,
+    FUN = "/"
+  )
+  
+  # Within-stratum centered matrix
+  X_within <- X - group_mean[g, , drop = FALSE]
+  
+  
+  # ------------------------------------------------------------
+  # 5. Remove columns with no within-stratum variation
+  # ------------------------------------------------------------
+  
+  ss <- colSums(X_within^2)
+  
+  has_variation <- is.finite(ss) & ss > tol
+  
+  dropped_columns <- colnames(X_within)[!has_variation]
+  
+  if (length(dropped_columns) > 0) {
+    message(
+      length(dropped_columns),
+      " design-matrix columns have no within-stratum variation ",
+      "and were removed."
+    )
+  }
+  
+  X_within <- X_within[, has_variation, drop = FALSE]
+  assign <- assign[has_variation]
+  
+  
+  # ------------------------------------------------------------
+  # 6. Correlation matrix of within-stratum predictors
+  # ------------------------------------------------------------
+  
+  R <- cor(X_within)
+  
+  if (rcond(R) < tol) {
+    warning(
+      "The within-stratum design matrix is nearly singular. ",
+      "Some VIF/GVIF values may be extremely large or infinite."
+    )
+  }
+  
+  
+  # Stable log determinant
+  logdet <- function(M) {
+    
+    d <- determinant(M, logarithm = TRUE)
+    
+    if (d$sign <= 0) {
+      return(NA_real_)
+    }
+    
+    as.numeric(d$modulus)
+  }
+  
+  logdet_R <- logdet(R)
+  
+  
+  # ------------------------------------------------------------
+  # 7. GVIF for each MODEL TERM
+  # ------------------------------------------------------------
+  
+  term_ids <- sort(unique(assign))
+  
+  result <- lapply(term_ids, function(j) {
+    
+    idx <- which(assign == j)
+    idx_other <- setdiff(seq_len(ncol(R)), idx)
+    
+    df <- length(idx)
+    
+    if (length(idx_other) == 0) {
+      
+      gvif <- NA_real_
+      
+    } else {
+      
+      gvif <- exp(
+        logdet(R[idx, idx, drop = FALSE]) +
+          logdet(R[idx_other, idx_other, drop = FALSE]) -
+          logdet_R
+      )
+    }
+    
+    data.frame(
+      term = term_labels[j],
+      GVIF = gvif,
+      Df = df,
+      `GVIF^(1/(2*Df))` = gvif^(1 / (2 * df)),
+      check.names = FALSE
+    )
+  })
+  
+  result <- do.call(rbind, result)
+  rownames(result) <- NULL
+  
+  
+  # Attach useful information
+  attr(result, "dropped_columns") <- dropped_columns
+  attr(result, "n_rows") <- sum(ok)
+  attr(result, "n_strata") <- length(unique(strata))
+  
+  result
+}
+
+form <- as.formula(tab_models$definition[3])
+
+vif_summer <- within_gvif_issf(
+  formula = form,
+  data = data_ready_summer_ssf_2h,
+  strata_var = "step_id_"
+)
+
+vif_summer |> 
+  tibble::as_tibble() |> 
+  readr::write_csv("output/ssf_summer_vif_table.csv")

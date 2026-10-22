@@ -3,7 +3,7 @@ title: "Appendix D. Cumulative impacts of mining and wind power development on r
 author: ""
 #author: Léonie Duris, Bernardo B. Niebuhr, Erik Cronvall, Moudud Alam, Per Sandström, Anna Skarin
 abstract: |
-  Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. Taking into account different zone of influence (ZOI) radii for mining and different scales for the terrain position index, we fitted a total of 21 candidate models for calving-site selection for each season and compared them through model selection procedures. We report: (i) the calving period and site identification; (ii) the statistical modeling of cumulative impact analysis; (iii) the model selection table comparing the structure and likelihood of the different models; (iv) the analysis of calving site selection and forage quality.
+  Here we present a detailed description of the data, methods, and results related to the calving-site selection analysis for reindeer under the presence of the mine and the wind turbines in the Malå reindeer herding district in Sweden. The calving site is the location where the female gives birth and spends time with the calf outside the herd to create an attachment bond. Taking into account different zone of influence (ZOI) radii for mining and different scales for the topographic position index, we fitted a total of 21 candidate models for calving-site selection for each season and compared them through model selection procedures. We report: (i) the calving period and site identification; (ii) the statistical modeling of cumulative impact analysis; (iii) the model selection table comparing the structure and likelihood of the different models; (iv) the analysis of calving site selection and forage quality.
 format: 
   pdf:
     toc: true
@@ -87,7 +87,7 @@ where the terms are:
 -   `log(public_road_dist+1)`, `log(priv_road_dist+1)`, `log(trails_dist+1)`, `log(power_lines_dist+1)`,`log(wind_turbines_dist_comb + 1)`: logarithm of the distance to the nearest infrastructure for public roads, private roads, trails, houses, power lines and wind turbines;
 -   `mining_Krist_nearestXXX`: ZOI (exponential decay distance) of the mine, computed considering a certain ZOI radius;
 
-The terms `XXX`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and the wind turbines, whether there was a cumulative impact of multiple wind power plants, and at which scale the TPI most affected reindeer habitat selection, we replaced these variables in the model structure above using each possible combination of ZOI radii and type (cumulative vs. nearest; Fig. B1) for wind power and the different ZOI radii for the mine, together with different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
+The terms `XXX`, and `TTT` in the model structure above represent scales or variables that varied across models fitted. To evaluate the most likely ZOI for the mine and at which scale the TPI most affected reindeer habitat selection, we replaced these variables in the model structure above using each possible combination of ZOI radii for the mine and different scales for the TPI. Models were compared through Akaike information criterion (AIC), as described in the main text. The scales included were:
 
 -   Mining (`XXX`): 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 -   TPI (`TTT`): 150 m, 250 m, 510 m.
@@ -155,5 +155,4 @@ coef_calving |>
 # Figure D3: Synchrony between calving date and forage quality
 
 ![Figure D3. Distribution of the absolute difference in days between the maximum instantaneous rate of green up and the dates of calving at calving sites for the females that have been within 2km from the wind turbines during calving in Malå reindeer herding community for each year from 2008 to 2018. The colors represent the phase of construction of the wind turbines.](images/synchronyIRG.png)
-
 

@@ -620,6 +620,22 @@ best_fit <- glm(form,
                 data = data_ready_calving_rsf_2h, #weights = w_obs,
                 family = binomial(link = "logit"))
 
+car::vif(best_fit) |> 
+  as.data.frame() |> 
+  tibble::rownames_to_column(var = "term") |> 
+  tibble::as_tibble() |> 
+  readr::write_csv("output/rsf_calving_vif_table.csv")
+
+bbmle::AICtab()
+AICtab(best_fit)
+best_fit$rank
+
+data_ready_calving_rsf_2h$Object_ID |> unique() |> length()
+
+# data_ready_calving_rsf_2h |> 
+#   dplyr::group_by(id, year) |> 
+#   dplyr::summarise(range_monitoring = range(t_))
+
 #-----------
 # Load maps
 maps_df <- arrow::read_parquet("maps/for_prediction/predictors.parquet")
@@ -808,3 +824,4 @@ maps_calving_prop |>
 #--------------------
 
 maps_calving_prop[[1]]
+

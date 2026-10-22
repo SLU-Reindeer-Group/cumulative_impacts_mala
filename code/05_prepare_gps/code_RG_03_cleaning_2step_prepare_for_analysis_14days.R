@@ -464,6 +464,26 @@ foo <- function(herding) {
 gps_calving_clean7 <- cutltraj(gps_ltraj2, "foo(herding)", nextr = F) |> 
   ld()
 
+# to compute % of missing data
+fix_rate <- 2
+summary_bursts0 <- gps_calving_clean7 |> 
+  dplyr::group_by(year, id, burst) |> 
+  dplyr::summarise(
+    start = min(date),
+    end = max(date),
+    duration_hours = as.numeric(
+      difftime(end, start, units = "hours")
+    ),
+    n_observed = n(),
+    n_expected = floor(duration_hours / fix_rate) + 1,
+    n_missing = pmax(n_expected - n_observed, 0),
+    missing_pct = 100 * n_missing / n_expected,
+    fix_success_pct = 100 * n_observed / n_expected,
+    .groups = "drop"
+  )
+summary_bursts0$missing_pct |> range()
+summary_bursts0$missing_pct |> mean()
+
 # remove bursts with too few positions
 (summary_bursts1 <- gps_calving_clean7 |>
     dplyr::group_by(year, id) |>
@@ -546,6 +566,26 @@ if(!dir.exists(folder_cleaned)) dir.create(folder_cleaned)
 # write summary tables
 readr::write_csv(summary1, file = paste0(folder_cleaned, "summary_n_per_season_calving.csv"))
 readr::write_csv(summary2, file = paste0(folder_cleaned, "summary_n_per_individual_calving.csv"))
+
+# to compute % of missing data
+fix_rate <- 2
+summary_bursts0 <- gps_calving_clean9 |> 
+  dplyr::group_by(year, id, burst) |> 
+  dplyr::summarise(
+    start = min(date),
+    end = max(date),
+    duration_hours = as.numeric(
+      difftime(end, start, units = "hours")
+    ),
+    n_observed = n(),
+    n_expected = floor(duration_hours / fix_rate) + 1,
+    n_missing = pmax(n_expected - n_observed, 0),
+    missing_pct = 100 * n_missing / n_expected,
+    fix_success_pct = 100 * n_observed / n_expected,
+    .groups = "drop"
+  )
+summary_bursts0$missing_pct |> range()
+summary_bursts0$missing_pct |> mean()
 
 #------------------------
 # Cleaning for Summer season
@@ -907,6 +947,26 @@ if(!dir.exists(folder_cleaned)) dir.create(folder_cleaned)
 readr::write_csv(summary1, file = paste0(folder_cleaned, "summary_n_per_season_summer.csv"))
 readr::write_csv(summary2, file = paste0(folder_cleaned, "summary_n_per_individual_summer.csv"))
 
+# to compute % of missing data
+fix_rate <- 2
+summary_bursts0_sum <- gps_summer_clean9 |> 
+  dplyr::group_by(year, id, burst) |> 
+  dplyr::summarise(
+    start = min(date),
+    end = max(date),
+    duration_hours = as.numeric(
+      difftime(end, start, units = "hours")
+    ),
+    n_observed = n(),
+    n_expected = floor(duration_hours / fix_rate) + 1,
+    n_missing = pmax(n_expected - n_observed, 0),
+    missing_pct = 100 * n_missing / n_expected,
+    fix_success_pct = 100 * n_observed / n_expected,
+    .groups = "drop"
+  )
+summary_bursts0_sum$missing_pct |> range()
+summary_bursts0_sum$missing_pct |> mean()
+
 #------------------------
 # Cleaning for Autumn season
 
@@ -1215,6 +1275,26 @@ if(!dir.exists(folder_cleaned)) dir.create(folder_cleaned)
 # write summary tables
 readr::write_csv(summary1, file = paste0(folder_cleaned, "summary_n_per_season_autumn.csv"))
 readr::write_csv(summary2, file = paste0(folder_cleaned, "summary_n_per_individual_autumn.csv"))
+
+# to compute % of missing data
+fix_rate <- 2
+summary_bursts0_aut <- gps_autumn_clean9 |> 
+  dplyr::group_by(year, id, burst) |> 
+  dplyr::summarise(
+    start = min(date),
+    end = max(date),
+    duration_hours = as.numeric(
+      difftime(end, start, units = "hours")
+    ),
+    n_observed = n(),
+    n_expected = floor(duration_hours / fix_rate) + 1,
+    n_missing = pmax(n_expected - n_observed, 0),
+    missing_pct = 100 * n_missing / n_expected,
+    fix_success_pct = 100 * n_observed / n_expected,
+    .groups = "drop"
+  )
+summary_bursts0_aut$missing_pct |> range()
+summary_bursts0_aut$missing_pct |> mean()
 
 #---------
 # 

@@ -499,7 +499,7 @@ data_ready_autumn_rsf_2h <- data_ready_autumn_rsf_2h |>
 levels(data_ready_autumn_rsf_2h$landcover_cc_grouped)
 
 # model comparison
-load("output/rsf_results/autumn_multi_zoi_table_lc_grouped.rda")
+load("output/rsf_results/rsf_autumn_multi_zoi_table_lc_grouped.rda")
 
 # compare models
 tab_models
@@ -510,6 +510,16 @@ form <- tab_models$definition[1]
 best_fit <- glm(form, 
                 data = data_ready_autumn_rsf_2h, #weights = w_obs,
                 family = binomial(link = "logit"))
+
+car::vif(best_fit) |> 
+  as.data.frame() |> 
+  tibble::rownames_to_column(var = "term") |> 
+  tibble::as_tibble() |> 
+  readr::write_csv("output/rsf_autumn_vif_table.csv")
+
+best_fit$rank
+data_ready_autumn_rsf_2h$Object_ID |> unique() |> length()
+
 
 #-----------
 # Load maps

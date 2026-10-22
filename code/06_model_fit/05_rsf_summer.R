@@ -614,6 +614,15 @@ best_fit <- glm(form,
                 data = data_ready_summer_rsf_2h, #weights = w_obs,
                 family = binomial(link = "logit"))
 
+car::vif(best_fit) |> 
+  as.data.frame() |> 
+  tibble::rownames_to_column(var = "term") |> 
+  tibble::as_tibble() |> 
+  readr::write_csv("output/rsf_summer_vif_table.csv")
+
+best_fit$rank
+data_ready_summer_rsf_2h$Object_ID |> unique() |> length()
+
 #-----------
 # Load maps
 maps_df <- arrow::read_parquet("maps/for_prediction/predictors.parquet")

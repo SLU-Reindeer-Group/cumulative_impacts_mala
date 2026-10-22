@@ -3,7 +3,7 @@ title: "Appendix B. Cumulative impacts of mining and wind power development on r
 author: ""
 #author: Bernardo B. Niebuhr, Erik Cronvall, Léonie Duris, Moudud Alam, Manuela Panzacchi, Bram van Moorter, Per Sandström, Anna Skarin
 abstract: |
-  Here we provide supplementary information regarding the landscape-scale (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. Taking into account different zone of influence (ZOI) radii for mining, different ZOI types (density vs. nearest) and radii for wind turbines, and different scales for the terrain position index, we fitted a total of 294 models for each season and compared them through model selection procedures. Here we present, for each season: (i) the setup of the habitat selection models; (ii) the best-ranged habitat selection models; (iii) the model selection tables comparing the structure and likelihood of the different models; (iv) the tables of coefficients; (v) figures illustrating the impacts of mining and wind turbines; (vi) maps with the predicted habitat suitability and GPS data across the three wind power development phases.
+  Here we provide supplementary information regarding the landscape-scale (2nd order) assessment of reindeer selection for grazing sites in the Malå reindeer herding community, Sweden, under the presence of mining and wind power development, for the three snow-free seasons: calving, summer, and autumn. Taking into account different zone of influence (ZOI) radii for mining, different ZOI types (density vs. nearest) and radii for wind turbines, and different scales for the topographic position index, we fitted a total of 294 models for each season and compared them through model selection procedures. Here we present, for each season: (i) the setup of the habitat selection models; (ii) the best-ranged habitat selection models; (iii) the model selection tables comparing the structure and likelihood of the different models; (iv) the tables of coefficients; (v) figures illustrating the impacts of mining and wind turbines; (vi) maps with the predicted habitat suitability and GPS data across the three wind power development phases.
 format: 
   pdf:
     toc: true
@@ -96,7 +96,7 @@ The terms `XXX`, `ZZZ`, and `TTT` in the model structure above represent scales 
 - Wind turbines (`ZZZ`): density of turbines or distance to the nearest turbine, with ZOI radii 100 m, 250 m, 500 m, 1 km, 2.5 km, 5 km, 10 km.
 - TPI: 150 m, 250 m, 510 m.
 
-All fixed terms are shared across models, and only the mine ZOI, the wind ZOI type and radius, and TPI scale varied. Consequently, all models had the same number of parameters. This combination of possible variables resulted in a total of 294 models tested and compared for each season. Models were built with data of all individuals pooled.
+All fixed terms are shared across models, and only the mine ZOI, the wind ZOI type and radius, and TPI scale varied. Consequently, all models had the same number of parameters (n = 49). This combination of possible variables resulted in a total of 294 models tested and compared for each season. Models were built with data of all individuals pooled.
 
 ![Figure B1. Illustration of two types of measures used to represent the influence of wind turbines in our study. The upper row shows the expected impact if we consider the effect of the nearest wind turbine only, which is similar whether one gets closer to one isolated turbine or a whole wind park. The bottom row shows the density of wind turbines, which captures the cumulative impact of multiple wind turbines and is larger when one gets closer to a wind park than to an isolated wind turbine. These two types of variables were used as predictors in the statistical models to estimate whether there were cumulative impacts of features of the same type.](FB1_conceptual_cumulative_impacts.png)
 
@@ -152,13 +152,15 @@ if (.is_pdf_output()) cat("Table B1 was truncated to show only the first 10 mode
 
 ```{r aic_calving, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_calving
-#| fig-cap: "Table B1. Table of model selection for the HSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
+#| fig-cap: "Table B1. Table of model selection for the HSA models for calving. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), the log Likehood and AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
 
 aic_calving <- readr::read_csv("../../output/rsf_results/rsf_calving_AIC_table_complete.csv")
 
 aic_calving |> 
   dplyr::filter(!grepl("log", wind)) |> 
   dplyr::mutate(dAIC = aic - min(aic),
+                df = 49,
+                logLik = round((aic - 2*df)/-2, 1),
                 rel_likelihood = exp(-0.5 * dAIC),
                 akaike_weights = rel_likelihood / sum(rel_likelihood),
                 akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", akaike_weights),
@@ -167,7 +169,8 @@ aic_calving |>
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
+  dplyr::relocate(logLik, .after = tpi) |> 
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights, df)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
@@ -176,7 +179,7 @@ aic_calving |>
                 `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1.2cm", "1cm", "1cm", "1.25cm", "1.15cm", "5.5cm"))
 ```
 
 # Table B2: Model selection table in summer
@@ -199,13 +202,15 @@ if (.is_pdf_output()) cat("Table B2 was truncated to show only the first 10 mode
 
 ```{r aic_summer, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_summer
-#| fig-cap: "Table B2. Table of model selection for the HSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
+#| fig-cap: "Table B2. Table of model selection for the HSA models for summer. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), the log Likehood and AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
 #| 
 aic_summer <- readr::read_csv("../../output/rsf_results/rsf_summer_AIC_table_complete.csv")
 
 aic_summer |> 
   dplyr::filter(!grepl("log", wind)) |> 
   dplyr::mutate(dAIC = aic - min(aic),
+                df = 49,
+                logLik = round((aic - 2*df)/-2, 1),
                 rel_likelihood = exp(-0.5 * dAIC),
                 akaike_weights = rel_likelihood / sum(rel_likelihood),
                 akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", akaike_weights),
@@ -214,7 +219,8 @@ aic_summer |>
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
+  dplyr::relocate(logLik, .after = tpi) |> 
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights, df)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
@@ -223,7 +229,7 @@ aic_summer |>
                 `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1cm", "1.25cm", "1.15cm", "5.5cm"))
 
 # aic_summer |> 
 #   dplyr::slice(1:15)
@@ -248,13 +254,15 @@ if (.is_pdf_output()) cat("Table B3 was truncated to show only the first 10 mode
 
 ```{r aic_autumn, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: aic_autumn
-#| fig-cap: "Table B3. Table of model selection for the HSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
+#| fig-cap: "Table B3. Table of model selection for the HSA models for autumn. Columns are zone of influence (ZOI) radius for mining and wind turbines, scale for the topographic position index (TPI), the log Likehood and AIC of the model, dAIC of each model in relation to the most parsimonious model, Akaike weights, cumulative Akaike weights, and the formula with each model's structure."
 
 aic_autumn <- readr::read_csv("../../output/rsf_results/rsf_autumn_AIC_table_complete.csv")
 
 aic_autumn |> 
   dplyr::filter(!grepl("log", wind), !grepl("viewshed", lc)) |> 
   dplyr::mutate(dAIC = aic - min(aic),
+                df = 49,
+                logLik = round((aic - 2*df)/-2, 1),
                 rel_likelihood = exp(-0.5 * dAIC),
                 akaike_weights = rel_likelihood / sum(rel_likelihood),
                 akaike_weights_text = ifelse(akaike_weights < 0.0001, "< 0.0001", akaike_weights),
@@ -263,7 +271,8 @@ aic_autumn |>
                 aic = round(aic, digits = 2),
                 tpi = sub("tpi_cat_s", "", tpi)) |> 
   dplyr::relocate(definition, .after = last_col()) |> 
-  dplyr::select(-c(lc, rel_likelihood, akaike_weights)) |>
+  dplyr::relocate(logLik, .after = tpi) |> 
+  dplyr::select(-c(lc, rel_likelihood, akaike_weights, df)) |>
   dplyr::rename(`Mining ZOI radius` = 1,
                 `Wind turbine ZOI radius` = 2,
                 TPI = tpi,
@@ -272,7 +281,7 @@ aic_autumn |>
                 `Cumulative Akaike weights` = cumulative_akaike_weights,
                 formula = definition) |> 
   # DT::datatable()
-  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1.25cm", "1.15cm", "6.5cm"))
+  make_table(truncate_lines_pdf = 10, col_widths = c("1.5cm", "1.5cm", "0.75cm", "1cm", "1cm", "1cm", "1.25cm", "1.15cm", "5.5cm"))
 ```
 
 # Text B3: Disturbance effects on habitat selection
@@ -296,7 +305,7 @@ A summary of the results:
 
 ```{r coef_general, warning=FALSE, message=FALSE, echo=FALSE}
 #| label: coef_general
-#| fig-cap: "Table B4. Coefficient estimates for the infrastructure types and the start/end of season on habitat selection for all three seasons. The complete table of coefficient estimates for each season is shown in Tables B5-B7."
+#| fig-cap: "Table B4. Coefficient estimates for the infrastructure types and the start/end of season on habitat selection for all three seasons. The complete table of coefficient estimates for each season is shown in Tables B5, B7, and B9."
 #| 
 # read calving
 coef_calving <- readr::read_csv("../../output/rsf_results/rsf_calving_coef_table_landcover_grouped.csv") |> 
@@ -355,11 +364,27 @@ coef_calving |>
   make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
-# Table B6: Coefficients - summer
+We also provide the table of variance inflation factor for the most parsimonious model. Note that all 
+values in the last column are < 5.
+
+```{r, echo=FALSE, message=FALSE}
+#| label: vif_calving
+#| fig-cap: "Table B6. General variance inflation factors (VIF) for the terms of the model for calving."
+
+vif_calving <- readr::read_csv("../../output/rsf_calving_vif_table.csv")
+
+vif_calving |> 
+  dplyr::rename("Term" = 1) |>
+  dplyr::mutate(across(where(is.numeric), \(x) round(x, digits = 2))) |> 
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm"))
+```
+
+# Table B7: Coefficients - summer
 
 ```{r, echo=FALSE}
 #| label: coef_summer
-#| fig-cap: "Table B6. Complete table with coefficient estimates for the best-ranked landscape-scale habitat selection functions during summer."
+#| fig-cap: "Table B7. Complete table with coefficient estimates for the best-ranked landscape-scale habitat selection functions during summer."
 
 coef_summer |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
@@ -367,16 +392,47 @@ coef_summer |>
   make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
 ```
 
-# Table B7: Coefficients - autumn
+We also provide the table of variance inflation factor for the most parsimonious model. Note that all 
+values in the last column are < 5.
+
+```{r, echo=FALSE, message=FALSE}
+#| label: vif_summer
+#| fig-cap: "Table B8. General variance inflation factors (VIF) for the terms of the model for summer."
+
+vif_summer <- readr::read_csv("../../output/rsf_summer_vif_table.csv")
+
+vif_summer |> 
+  dplyr::rename("Term" = 1) |>
+  dplyr::mutate(across(where(is.numeric), \(x) round(x, digits = 2))) |> 
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm"))
+```
+# Table B9: Coefficients - autumn
 
 ```{r, echo=FALSE}
 #| label: coef_autumn
-#| fig-cap: "Table B7. Complete table with coefficient estimates for the best-ranked landscape-scale habitat selection functions during autumn."
+#| fig-cap: "Table B9. Complete table with coefficient estimates for the best-ranked landscape-scale habitat selection functions during autumn."
 
 coef_autumn |> 
   dplyr::select(-c(statistic, significant, p.value)) |>
   # DT::datatable()
   make_table(col_widths = c("10cm", "1cm", "1cm", "1cm", "2.5cm"))
+```
+
+We also provide the table of variance inflation factor for the most parsimonious model. Note that all 
+values in the last column are < 5.
+
+```{r, echo=FALSE, message=FALSE}
+#| label: vif_autumn
+#| fig-cap: "Table B10. General variance inflation factors (VIF) for the terms of the model for autumn."
+
+vif_autumn <- readr::read_csv("../../output/rsf_autumn_vif_table.csv")
+
+vif_autumn |> 
+  dplyr::rename("Term" = 1) |>
+  dplyr::mutate(across(where(is.numeric), \(x) round(x, digits = 2))) |> 
+  # DT::datatable()
+  make_table(col_widths = c("10cm", "1cm", "1cm", "1cm"))
 ```
 
 # Figure B2: Impacts of mining on habitat selection in calving

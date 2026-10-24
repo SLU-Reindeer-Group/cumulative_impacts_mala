@@ -134,6 +134,7 @@ baseline_total <- sum_r(input[[1]] * cell_area)
 decreases <- terra::clamp(input[[1]] - input[[c(2,3)]], lower = 0)
 increases <- terra::clamp(input[[c(2,3)]] - input[[1]], lower = 0)
 
+names(decreases) <- c("construction", "operation")
 plot(decreases)
 plot(increases)
 
@@ -506,6 +507,7 @@ baseline_total <- sum_r(input[[1]] * cell_area)
 decreases <- terra::clamp(input[[1]] - input[[c(2,3)]], lower = 0)
 increases <- terra::clamp(input[[c(2,3)]] - input[[1]], lower = 0)
 
+names(decreases) <- c("construction", "operation")
 plot(decreases)
 plot(increases)
 
@@ -1046,6 +1048,7 @@ baseline_total <- sum_r(input[[1]] * cell_area)
 decreases <- terra::clamp(input[[1]] - input[[c(2,3)]], lower = 0)
 increases <- terra::clamp(input[[c(2,3)]] - input[[1]], lower = 0)
 
+names(decreases) <- c("construction", "operation")
 plot(decreases)
 plot(increases)
 
